@@ -1,0 +1,44 @@
+import asyncio
+import logging
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="FieldEngineer API")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {
+                    "loc": err.get("loc"),
+                    "msg": err.get("msg"),
+                    "type": err.get("type"),
+                }
+                for err in exc.errors()
+            ]
+        },
+    )
+
+BASE_DIR = Path(__file__).resolve().parent
+
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
+@app.get("/config")
+def config():
+    return {
+        "app_name": settings.APP_NAME,
+        "database": settings.POSTGRES_DB,
+        "email_enabled": settings.EMAIL_ENABLED
+    }
