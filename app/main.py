@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import engine
 # from app.profile.registration import router as auth_rout
 from app.profile.auth.registration import router as auth_router
+from app.profile.profile import router as profile_router
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +72,4 @@ def db_check():
 def db_url():
     return {"url": settings.database_url}
 app.include_router(auth_router)
+app.include_router(profile_router)

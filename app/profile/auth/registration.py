@@ -131,10 +131,21 @@ async def signin(
             detail="Invalid credentials"
         )
 
+    # return {
+    #     "message": "Credentials verified successfully",
+    #      "role": user.role.value
+    # }
+    token = create_access_token(
+        {"sub": user.email}
+    )
+
     return {
-        "message": "Credentials verified successfully",
-         "role": user.role.value
+       "message": "Credentials verified successfully",
+        "role": user.role.value,
+        "access_token": token,
+        "token_type": "bearer"
     }
+
 
 
 @router.post("/request-otp")
