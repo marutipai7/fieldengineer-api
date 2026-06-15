@@ -42,8 +42,8 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True))
 
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-    field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-    vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
+    # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
+    # vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -57,7 +57,7 @@ class UserProfile(Base):
     referral_code = Column(String(20), unique=True)
     user = relationship("User",back_populates="user_profile")
     addresses = relationship("UserAddress",back_populates="profile",cascade="all, delete-orphan")
-    emergency_contacts = relationship("EmergencyContact",back_populates="profile",cascade="all, delete-orphan")
+    # emergency_contacts = relationship("EmergencyContact",back_populates="profile",cascade="all, delete-orphan")
 
 class UserAddress(Base):
     __tablename__ = "user_addresses"

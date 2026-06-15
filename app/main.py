@@ -9,6 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from app.core.config import settings
 from app.core.database import engine
+# from app.profile.registration import router as auth_rout
+from app.profile.auth.registration import router as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +70,4 @@ def db_check():
 @app.get("/db-url")
 def db_url():
     return {"url": settings.database_url}
+app.include_router(auth_router)
