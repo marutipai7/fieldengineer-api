@@ -31,17 +31,30 @@ def send_otp_to_user(email_or_phone: str):
     print(f"[OTP DEBUG] OTP for {email_or_phone} → {otp}")
     # TODO: Integrate with Twilio / Email service
 
+# def verify_otp_for_user(email_or_phone: str, otp: str = None):
+#     data = otp_store.get(email_or_phone)
+#     if not data:
+#         return False
+#     if datetime.utcnow() > data["expires_at"]:
+#         del otp_store[email_or_phone]
+#         return False
+#     if otp is None:
+#         # OTP pre-verification placeholder
+#         return True
+#     if data["otp"] == otp:
+#         del otp_store[email_or_phone]
+#         return True
+#     return False
 def verify_otp_for_user(email_or_phone: str, otp: str = None):
+    print("OTP STORE =", otp_store)
+
     data = otp_store.get(email_or_phone)
+
     if not data:
+        print("NO DATA FOUND")
         return False
-    if datetime.utcnow() > data["expires_at"]:
-        del otp_store[email_or_phone]
-        return False
-    if otp is None:
-        # OTP pre-verification placeholder
-        return True
-    if data["otp"] == otp:
-        del otp_store[email_or_phone]
-        return True
-    return False
+
+    print("STORED OTP =", data["otp"])
+    print("ENTERED OTP =", otp)
+
+    return str(data["otp"]).strip() == str(otp).strip()

@@ -1,4 +1,5 @@
 import asyncio
+from sqlalchemy import text
 import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -7,6 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from app.core.config import settings
+from app.core.database import engine
+# from app.profile.registration import router as auth_rout
+from app.profile.auth.registration import router as auth_router
+from app.profile.profile import router as profile_router
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +47,29 @@ def config():
         "database": settings.POSTGRES_DB,
         "email_enabled": settings.EMAIL_ENABLED
     }
+
+@app.get("/db-check")
+def db_check():
+    try:
+        with engine.connect() as conn:
+            version = conn.execute(
+                text("SELECT version();")
+            ).scalar()
+
+        return {
+            "success": True,
+            "database": "connected",
+            "version": version
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/db-url")
+def db_url():
+    return {"url": settings.database_url}
+app.include_router(auth_router)
+app.include_router(profile_router)

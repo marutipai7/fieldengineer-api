@@ -1,38 +1,77 @@
+# import aiosmtplib
+# from email.message import EmailMessage
+# from app.core.config import (
+#     SMTP_FROM,
+#     SMTP_HOST,
+#     SMTP_PASSWORD,
+#     SMTP_PORT,
+#     SMTP_USERNAME,
+#     EMAIL_USE_TLS,
+# )
+
+
+# async def send_email(recipient: str, subject: str, body: str):
+#     print(f"📧 Attempting to send email to: {recipient}")
+#     print(f"📧 Subject: {subject}")
+#     print(f"📧 Body: {body}")
+    
+#     msg = EmailMessage()
+#     msg["From"] = SMTP_FROM
+#     msg["To"] = recipient
+#     msg["Subject"] = subject
+#     msg.set_content(body)
+    
+#     print(f"🔗 Connecting to {SMTP_HOST}:{SMTP_PORT} with STARTTLS")
+#     try:
+#         await aiosmtplib.send(
+#             msg,
+#             hostname=SMTP_HOST,
+#             port=SMTP_PORT,
+#             username=SMTP_USERNAME,
+#             password=SMTP_PASSWORD,
+#             use_tls=False,
+#             start_tls=True,
+#         )
+#         print("✅ Email sent successfully!")
+#     except Exception as e:
+#         print(f"❌ EMAIL SEND ERROR: {type(e).__name__}: {e}")
+
 import aiosmtplib
 from email.message import EmailMessage
-from app.core.config import (
-    SMTP_FROM,
-    SMTP_HOST,
-    SMTP_PASSWORD,
-    SMTP_PORT,
-    SMTP_USERNAME,
-    EMAIL_USE_TLS,
-)
+from app.core.config import settings
 
 
 async def send_email(recipient: str, subject: str, body: str):
     print(f"📧 Attempting to send email to: {recipient}")
     print(f"📧 Subject: {subject}")
     print(f"📧 Body: {body}")
-    
+
     msg = EmailMessage()
-    msg["From"] = SMTP_FROM
+    msg["From"] = settings.SMTP_FROM
     msg["To"] = recipient
     msg["Subject"] = subject
     msg.set_content(body)
-    
-    print(f"🔗 Connecting to {SMTP_HOST}:{SMTP_PORT} with STARTTLS")
+
+    print(
+        f"🔗 Connecting to "
+        f"{settings.SMTP_HOST}:{settings.SMTP_PORT}"
+    )
+
     try:
         await aiosmtplib.send(
             msg,
-            hostname=SMTP_HOST,
-            port=SMTP_PORT,
-            username=SMTP_USERNAME,
-            password=SMTP_PASSWORD,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USERNAME,
+            password=settings.SMTP_PASSWORD,
             use_tls=False,
             start_tls=True,
         )
-        print("✅ Email sent successfully!")
-    except Exception as e:
-        print(f"❌ EMAIL SEND ERROR: {type(e).__name__}: {e}")
 
+        print("✅ Email sent successfully!")
+
+    except Exception as e:
+        print(
+            f"❌ EMAIL SEND ERROR: "
+            f"{type(e).__name__}: {e}"
+        )
