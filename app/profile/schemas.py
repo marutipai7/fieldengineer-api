@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr
 from app.profile.models import UserRole
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel
+
 
 class SignupSchema(BaseModel):
     email: EmailStr
@@ -33,9 +33,7 @@ class MessageResponseSchema(BaseModel):
     message: str
 
 
-from pydantic import BaseModel
-from datetime import date
-from typing import Optional
+
 
 
 class UserProfileSchema(BaseModel):
@@ -61,11 +59,6 @@ class AddressCreateSchema(BaseModel):
 
 
 
-class UserProfileSchema(BaseModel):
-    full_name: str
-    date_of_birth: Optional[date] = None
-    gender: Optional[str] = None
-    profile_image: Optional[str] = None
 
 
 class AddressCreateSchema(BaseModel):
