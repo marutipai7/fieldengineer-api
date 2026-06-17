@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from uuid import UUID
+
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
