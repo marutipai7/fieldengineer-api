@@ -12,11 +12,11 @@ from sqlalchemy import (
     Time
 )
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import UUID
+# from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import Column, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 
-import uuid
+# import uuid
 import enum
 
 from app.core.database import Base
@@ -31,7 +31,12 @@ class UserRole(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    # id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    id = Column(
+       Integer,
+       primary_key=True,
+       autoincrement=True
+    )
     email = Column(String(255), unique=True, nullable=False)
     phone_number = Column(String(20), unique=True)
     password_hash = Column(String(255), nullable=False)
@@ -48,8 +53,20 @@ class User(Base):
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True),ForeignKey("users.id", ondelete="CASCADE"),unique=True,nullable=False)
+    # id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    # user_id = Column(UUID(as_uuid=True),ForeignKey("users.id", ondelete="CASCADE"),unique=True,nullable=False)
+    id = Column(
+          Integer,
+          primary_key=True,
+          autoincrement=True
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
     full_name = Column(String(255))
     date_of_birth = Column(Date)
     gender = Column(String(20))
@@ -62,8 +79,19 @@ class UserProfile(Base):
 class UserAddress(Base):
     __tablename__ = "user_addresses"
 
-    id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
-    profile_id = Column(UUID(as_uuid=True),ForeignKey("user_profiles.id",ondelete="CASCADE"),nullable=False)
+    # id = Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
+    # profile_id = Column(UUID(as_uuid=True),ForeignKey("user_profiles.id",ondelete="CASCADE"),nullable=False)
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
     address_type = Column(String(50))  # home, office, other
     name = Column(String(255))
     flat_no = Column(String(255))

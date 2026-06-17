@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from uuid import UUID
+
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
@@ -81,7 +81,7 @@ async def create_address(
 
     return {
         "message": "Address added successfully",
-        "address_id": str(address.id)
+        "address_id": address.id
     }
 @router.get("/address")
 async def get_addresses(
@@ -104,7 +104,7 @@ async def get_addresses(
 
     return [
         {
-            "id": str(address.id),
+            "id": address.id,
             "address_type": address.address_type,
             "name": address.name,
             "flat_no": address.flat_no,
@@ -121,7 +121,7 @@ async def get_addresses(
     ]
 @router.put("/address/{address_id}")
 async def update_address(
-    address_id: UUID,
+    address_id: int,
     payload: AddressUpdateSchema,
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
@@ -157,7 +157,7 @@ async def update_address(
     }
 @router.delete("/address/{address_id}")
 async def delete_address(
-    address_id: UUID,
+    address_id: int,
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
