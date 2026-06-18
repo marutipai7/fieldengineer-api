@@ -38,7 +38,7 @@ def upgrade() -> None:
     op.create_table('bookings',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('booking_number', sa.String(length=50), nullable=False),
+    # sa.Column('booking_number', sa.String(length=50), nullable=False),
     sa.Column('service_type', sa.String(length=255), nullable=True),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('booking_status', sa.Enum('PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', name='bookingstatus'), nullable=True),
@@ -49,7 +49,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('booking_number')
+    # sa.UniqueConstraint('booking_number')
     )
     op.create_table('user_profiles',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
