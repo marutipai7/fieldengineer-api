@@ -360,12 +360,16 @@ async def update_booking(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    booking.service_type = payload.service_type
-    booking.description = payload.description
-    booking.scheduled_date = str(payload.scheduled_date)
-    booking.scheduled_time = str(payload.scheduled_time)
-    booking.address = payload.address
-
+    # booking.service_type = payload.service_type
+    # booking.description = payload.description
+    # booking.scheduled_date = str(payload.scheduled_date)
+    # booking.scheduled_time = str(payload.scheduled_time)
+    # booking.address = payload.address
+    booking.budget_min = payload.budget_min
+    booking.budget_max = payload.budget_max
+    booking.service_id = payload.service_id
+    booking.sub_service_id = payload.sub_service_id
+    booking.requirement_description = payload.requirement_description
     db.commit()
     db.refresh(booking)
 
