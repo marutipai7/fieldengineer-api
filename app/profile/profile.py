@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from passlib.hash import pbkdf2_sha256
 
+
+
 from app.utils.auth_utils import (
     create_access_token,
     get_current_user_email
@@ -20,8 +22,11 @@ from app.utils.auth_utils import get_current_user_email
 from app.profile.models import (
     User,
     UserProfile,
-    UserAddress
+    UserAddress,
+    FieldEngineerDocument,
+    FieldEngineerAvailability
 )
+
 
 from app.profile.schemas import (
     UserProfileSchema,
@@ -258,7 +263,11 @@ async def complete_profile(
             user_id=user.id
         )
         db.add(profile)
+        db.flush()
 
+    # ----------------------------
+    # Save Profile
+    # ----------------------------
     profile.full_name = payload.full_name
     profile.date_of_birth = payload.date_of_birth
     profile.gender = payload.gender
@@ -269,14 +278,67 @@ async def complete_profile(
     )
 
     profile.vendor_id = payload.vendor_id
-
     profile.years_of_experience_id = (
         payload.years_of_experience_id
     )
-
     profile.primary_specialization_id = (
         payload.primary_specialization_id
     )
+
+    # ----------------------------
+    # Save Documents
+    # ----------------------------
+    if payload.documents:
+
+        document = db.execute(
+            select(FieldEngineerDocument).where(
+                FieldEngineerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not document:
+            document = FieldEngineerDocument(
+                user_profile_id=profile.id
+            )
+            db.add(document)
+
+        document.identity_proof = payload.documents.identity_proof
+        document.education_certificate = (
+            payload.documents.education_certificate
+        )
+        document.work_company_id = (
+            payload.documents.work_company_id
+        )
+        document.certification = (
+            payload.documents.certification
+        )
+        document.experience_certificate = (
+            payload.documents.experience_certificate
+        )
+        document.driving_license = (
+            payload.documents.driving_license
+        )
+
+    # ----------------------------
+    # Save Availability
+    # ----------------------------
+    if payload.availability:
+
+        db.query(FieldEngineerAvailability).filter(
+            FieldEngineerAvailability.field_engineer_id == profile.id
+        ).delete()
+
+        for item in payload.availability:
+
+            availability = FieldEngineerAvailability(
+                field_engineer_id=profile.id,
+                day_of_week=item.day_of_week,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                is_available=item.is_available
+            )
+
+            db.add(availability)
 
     db.commit()
     db.refresh(profile)
@@ -285,4 +347,6 @@ async def complete_profile(
         "message": "Field Engineer profile completed successfully",
         "profile_id": profile.id
     }
+
+    
 
