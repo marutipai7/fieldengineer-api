@@ -1,6 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from passlib.hash import pbkdf2_sha256
+
+from app.utils.auth_utils import (
+    create_access_token,
+    get_current_user_email
+)
+
+from app.profile.schemas import (
+    SigninSchema,
+    FieldEngineerProfileSchema
+)
 
 
 from app.core.database import get_db
@@ -169,3 +180,109 @@ async def get_addresses(
         }
         for address in addresses
     ]
+@router.post("/signin")
+async def field_engineer_signin(
+    payload: SigninSchema,
+    db: Session = Depends(get_db)
+):
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
+
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    if user.role.value != "field_engineer":
+        raise HTTPException(
+            status_code=403,
+            detail="Only Field Engineer can login"
+        )
+
+    if not pbkdf2_sha256.verify(
+        payload.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    access_token = create_access_token(
+        {"sub": user.email}
+    )
+
+    return {
+        "message": "Field Engineer signed in successfully",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role.value
+    }
+
+@router.post("/complete-profile")
+async def complete_profile(
+    payload: FieldEngineerProfileSchema,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user = db.execute(
+        select(User).where(
+            User.email == current_user_email
+        )
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role.value != "field_engineer":
+        raise HTTPException(
+            status_code=403,
+            detail="Only Field Engineer can complete profile"
+        )
+
+    profile = db.execute(
+        select(UserProfile).where(
+            UserProfile.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not profile:
+        profile = UserProfile(
+            user_id=user.id
+        )
+        db.add(profile)
+
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
+
+    profile.is_associated_with_vendor = (
+        payload.is_associated_with_vendor
+    )
+
+    profile.vendor_id = payload.vendor_id
+
+    profile.years_of_experience_id = (
+        payload.years_of_experience_id
+    )
+
+    profile.primary_specialization_id = (
+        payload.primary_specialization_id
+    )
+
+    db.commit()
+    db.refresh(profile)
+
+    return {
+        "message": "Field Engineer profile completed successfully",
+        "profile_id": profile.id
+    }
+

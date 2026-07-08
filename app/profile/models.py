@@ -51,8 +51,57 @@ class UserProfile(Base):
     gender = Column(String(20))
     profile_image = Column(Text)
     referral_code = Column(String(20), unique=True)
+    is_associated_with_vendor = Column(
+       Boolean,
+       default=False
+    )
+
+    vendor_id = Column(
+       Integer,
+       ForeignKey("vendors.id"),
+       nullable=True
+    )
+
+    years_of_experience_id = Column(
+       Integer,
+       ForeignKey("years_of_experience.id"),
+       nullable=True
+    )
+
+    primary_specialization_id = Column(
+       Integer,
+       ForeignKey("primary_specializations.id"),
+       nullable=True
+    )
     user = relationship("User",back_populates="user_profile")
     addresses = relationship("UserAddress",back_populates="profile",cascade="all, delete-orphan")
+    vendor = relationship("Vendor")
+
+    years_of_experience = relationship(
+        "YearsOfExperience"
+    )
+
+    primary_specialization = relationship(
+        "PrimarySpecialization"
+    )
+    documents = relationship(
+       "FieldEngineerDocument",
+        back_populates="profile",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    availability = relationship(
+       "FieldEngineerAvailability",
+       back_populates="profile",
+       cascade="all, delete-orphan"
+    )
+
+    service_areas = relationship(
+       "FieldEngineerServiceArea",
+        back_populates="profile",
+        cascade="all, delete-orphan"
+    )
     # emergency_contacts = relationship("EmergencyContact",back_populates="profile",cascade="all, delete-orphan")
 
 class UserAddress(Base):
@@ -73,6 +122,42 @@ class UserAddress(Base):
     is_default = Column(Boolean, default=False)
 
     profile = relationship("UserProfile",back_populates="addresses")
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vendor_name = Column(String(255), nullable=False, unique=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+class YearsOfExperience(Base):
+    __tablename__ = "years_of_experience"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    experience = Column(String(100), nullable=False, unique=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+class PrimarySpecialization(Base):
+    __tablename__ = "primary_specializations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    specialization = Column(String(255), nullable=False, unique=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+
 
 # class EmergencyContact(Base):
 #     __tablename__ = "emergency_contacts"
@@ -248,16 +333,59 @@ class UserAddress(Base):
 
 #     id = Column(Integer, primary_key=True, autoincrement=True)
 
-#     field_engineer_id = Column(
-#         Integer,
-#         ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
-#     )
+    # field_engineer_id = Column(
+    #     Integer,
+    #     # ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
+    #     ForeignKey("user_profiles.id", ondelete="CASCADE")
+    # )
 
-#     document_type = Column(String(100))
-#     document_number = Column(String(255))
-#     file_url = Column(Text)
+    # document_type = Column(String(100))
+    # document_number = Column(String(255))
+    # file_url = Column(Text)
 
-#     verified = Column(Boolean, default=False)
+    # verified = Column(Boolean, default=False)
+
+class FieldEngineerDocument(Base):
+    __tablename__ = "field_engineer_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    identity_proof = Column(Text, nullable=True)
+
+    education_certificate = Column(Text, nullable=True)
+
+    work_company_id = Column(Text, nullable=True)
+
+    certification = Column(Text, nullable=True)
+
+    experience_certificate = Column(Text, nullable=True)
+
+    driving_license = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    # profile = relationship("UserProfile")
+    profile = relationship(
+       "UserProfile",
+       back_populates="documents"
+    )
+
 
 # class FieldEngineerBankAccount(Base):
 #     __tablename__ = "field_engineer_bank_accounts"
@@ -277,22 +405,79 @@ class UserAddress(Base):
 
 #     is_primary = Column(Boolean, default=False)
 
-# class FieldEngineerAvailability(Base):
-#     __tablename__ = "field_engineer_availability"
+class FieldEngineerAvailability(Base):
+    __tablename__ = "field_engineer_availability"
 
-#     id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
-#     field_engineer_id = Column(
-#         Integer,
-#         ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
-#     )
+    field_engineer_id = Column(
+        Integer,
+        # ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
+        ForeignKey("user_profiles.id", ondelete="CASCADE")
+    )
 
-#     day_of_week = Column(Integer)
+    day_of_week = Column(Integer)
 
-#     start_time = Column(Time)
-#     end_time = Column(Time)
+    start_time = Column(Time)
+    end_time = Column(Time)
 
-#     is_available = Column(Boolean, default=True)
+    is_available = Column(Boolean, default=True)
+
+    created_at = Column(
+       DateTime(timezone=True),
+       server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+ 
+    profile = relationship(
+       "UserProfile",
+       back_populates="availability"
+    )
+
+
+class FieldEngineerServiceArea(Base):
+    __tablename__ = "field_engineer_service_areas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    field_engineer_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    primary_city = Column(String(100), nullable=True)
+
+    service_radius = Column(Integer, nullable=True)
+
+    preferred_work_areas = Column(Text, nullable=True)
+
+    latitude = Column(String(50), nullable=True)
+
+    longitude = Column(String(50), nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+
+    updated_at = Column(
+       DateTime(timezone=True),
+       server_default=func.now(),
+       onupdate=func.now()
+    )
+
+    profile = relationship(
+       "UserProfile",
+        back_populates="service_areas"
+    )
+
 
 # class FieldEngineerAvailabilityException(Base):
 #     __tablename__ = "field_engineer_availability_exceptions"
