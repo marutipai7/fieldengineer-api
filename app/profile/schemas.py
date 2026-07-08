@@ -101,6 +101,9 @@ class FieldEngineerProfileSchema(BaseModel):
     years_of_experience_id: Optional[int] = None
     primary_specialization_id: Optional[int] = None
 
+    documents: Optional["FieldEngineerDocumentSchema"] = None
+    availability: Optional[list["FieldEngineerAvailabilitySchema"]] = None
+
 
 class FieldEngineerDocumentSchema(BaseModel):
     identity_proof: Optional[str] = None
@@ -124,6 +127,7 @@ class FieldEngineerServiceAreaSchema(BaseModel):
     preferred_work_areas: Optional[str] = None
     latitude: Optional[str] = None
     longitude: Optional[str] = None
+FieldEngineerProfileSchema.model_rebuild()
 
 
 
