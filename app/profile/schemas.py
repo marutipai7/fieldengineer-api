@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import time
 
 
+
 class SignupSchema(BaseModel):
     email: EmailStr
     password: str
@@ -128,6 +129,46 @@ class FieldEngineerServiceAreaSchema(BaseModel):
     latitude: Optional[str] = None
     longitude: Optional[str] = None
 FieldEngineerProfileSchema.model_rebuild()
+
+
+
+
+class FEAddressCreateSchema(BaseModel):
+    address_type: str
+
+    country: str
+    state: str
+    postal_code: str
+
+    area_locality: str
+    city: str
+
+    address_line1: str
+    address_line2: Optional[str] = None
+
+    latitude: Optional[str] = None
+    longitude: Optional[str] = None
+
+    is_default: bool = False
+
+
+class FEAddressUpdateSchema(BaseModel):
+    address_type: Optional[str] = None
+
+    country: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+
+    area_locality: Optional[str] = None
+    city: Optional[str] = None
+
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+
+    latitude: Optional[str] = None
+    longitude: Optional[str] = None
+
+    is_default: Optional[bool] = None
 
 
 
