@@ -80,3 +80,14 @@ class PaymentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class VerifyUpiRequest(BaseModel):
+    payment_id: int
+
+
+class VerifyBankRequest(BaseModel):
+    payment_id: int
+
+
+class VerifyCardRequest(BaseModel):
+    payment_id: int
