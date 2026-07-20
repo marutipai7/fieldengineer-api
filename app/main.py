@@ -14,6 +14,10 @@ from app.profile.auth.registration import router as auth_router
 from app.profile.profile import router as profile_router
 from app.profile.address import router as address_router
 from app.booking.booking import router as booking_router
+from app.help_support.help import router as help_router
+from app.booking.lead import router as lead_router
+from app.fieldengineer.help import router as field_engineer_help_router
+from app.payment_method.payment import router as payment_router
 
 
 
@@ -37,6 +41,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             ]
         },
     )
+
+app.include_router(lead_router)
+app.include_router(field_engineer_help_router)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -80,3 +87,5 @@ app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(address_router)
 app.include_router(booking_router)
+app.include_router(help_router)
+app.include_router(payment_router)
