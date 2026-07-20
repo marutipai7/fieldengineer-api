@@ -19,6 +19,16 @@ from app.payment_method.schemas import (
     PaymentDelete
 )
 
+from app.payment_method.schemas import (
+    PaymentCreate,
+    PaymentUpdate,
+    PaymentDelete,
+    VerifyUpiRequest,
+    VerifyBankRequest,
+    VerifyCardRequest
+)
+
+
 router = APIRouter(
     prefix="/payment",
     tags=["Payment"]
@@ -132,6 +142,104 @@ async def add_payment(
         "payment_id": payment.id
     }
 
+@router.post("/verify-upi")
+async def verify_upi(
+    payload: VerifyUpiRequest,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user = get_current_user(current_user_email, db)
+
+    payment = db.execute(
+        select(UpiPayment).where(
+            UpiPayment.id == payload.payment_id,
+            UpiPayment.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="UPI payment not found"
+        )
+
+    payment.is_verified = True
+
+    db.commit()
+    db.refresh(payment)
+
+    return {
+        "message": "UPI verified successfully",
+        "payment_id": payment.id,
+        "is_verified": payment.is_verified
+    }
+
+@router.post("/verify-bank")
+async def verify_bank(
+    payload: VerifyBankRequest,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user = get_current_user(current_user_email, db)
+
+    payment = db.execute(
+        select(NetBankingPayment).where(
+            NetBankingPayment.id == payload.payment_id,
+            NetBankingPayment.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="Bank account not found"
+        )
+
+    payment.is_verified = True
+
+    db.commit()
+    db.refresh(payment)
+
+    return {
+        "message": "Bank verified successfully",
+        "payment_id": payment.id,
+        "is_verified": payment.is_verified
+    }
+
+@router.post("/verify-card")
+async def verify_card(
+    payload: VerifyCardRequest,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user = get_current_user(current_user_email, db)
+
+    payment = db.execute(
+        select(CardPayment).where(
+            CardPayment.id == payload.payment_id,
+            CardPayment.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="Card not found"
+        )
+
+    payment.is_verified = True
+
+    db.commit()
+    db.refresh(payment)
+
+    return {
+        "message": "Card verified successfully",
+        "payment_id": payment.id,
+        "is_verified": payment.is_verified
+    }
 
 @router.get("")
 async def get_payments(
