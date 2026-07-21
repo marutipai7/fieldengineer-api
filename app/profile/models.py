@@ -39,7 +39,7 @@ class User(Base):
 
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-    # vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
+    vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -101,6 +101,29 @@ class UserProfile(Base):
        "FieldEngineerServiceArea",
         back_populates="profile",
         cascade="all, delete-orphan"
+    )
+
+
+
+    customer_identity = relationship(
+       "CustomerIdentity",
+        back_populates="profile",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    customer_business = relationship(
+       "CustomerBusiness",
+        back_populates="profile",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+    customer_documents = relationship(
+       "CustomerDocument",
+       back_populates="profile",
+       uselist=False,
+       cascade="all, delete-orphan"
     )
     # emergency_contacts = relationship("EmergencyContact",back_populates="profile",cascade="all, delete-orphan")
 
@@ -498,54 +521,422 @@ class FieldEngineerServiceArea(Base):
 
 
 # # ## Vendor Profile
-# class VendorProfile(Base):
-#     __tablename__ = "vendor_profiles"
+class VendorProfile(Base):
+    __tablename__ = "vendor_profiles"
 
-#     id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
-#     user_id = Column(
-#         Integer,
-#         ForeignKey("users.id", ondelete="CASCADE"),
-#         unique=True,
-#         nullable=False
-#     )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
 
-#     company_name = Column(String(255))
-#     legal_business_name = Column(String(255))
-#     business_type = Column(String(100))
-#     industry = Column(String(255))
+    company_name = Column(String(255))
+    owner_manager_name = Column(String(255))
 
-#     company_registration_number = Column(String(100))
-#     gst_number = Column(String(100))
-#     pan_number = Column(String(100))
+    vendor_type = Column(String(100))
+    legal_business_name = Column(String(255))
+    business_type = Column(String(100))
+    industry = Column(String(255))
 
-#     website = Column(Text)
+    company_registration_number = Column(String(100))
+    gst_number = Column(String(100))
+    pan_number = Column(String(100))
 
-#     years_in_business = Column(Integer)
+    website = Column(Text)
 
-#     company_registration_date = Column(Date)
+    years_in_business = Column(Integer)
 
-#     employee_count = Column(Integer)
+    company_registration_date = Column(Date)
 
-#     primary_service_category = Column(String(255))
+    employee_count = Column(Integer)
 
-#     about_business = Column(Text)
+    primary_service_category = Column(String(255))
 
-#     address = Column(Text)
+    about_business = Column(Text)
 
-#     city = Column(String(100))
-#     state = Column(String(100))
-#     pincode = Column(String(20))
+    address = Column(Text)
 
-#     timezone = Column(String(100))
-#     working_hours = Column(String(100))
+    city = Column(String(100))
+    state = Column(String(100))
+    pincode = Column(String(20))
 
-#     profile_image = Column(Text)
+    timezone = Column(String(100))
+    working_hours = Column(String(100))
 
-#     user = relationship(
-#         "User",
-#         back_populates="vendor_profile"
-#     )
+    profile_image = Column(Text)
+
+    user = relationship(
+        "User",
+        back_populates="vendor_profile"
+    )
+
+
+class VendorDocument(Base):
+    __tablename__ = "vendor_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    gst_certificate = Column(Text, nullable=True)
+    pan_card = Column(Text, nullable=True)
+    registration_certificate = Column(Text, nullable=True)
+    cancelled_cheque = Column(Text, nullable=True)
+    other_document = Column(Text, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    vendor_profile = relationship("VendorProfile")
+
+
+
+class VendorServiceCoverage(Base):
+    __tablename__ = "vendor_service_coverages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    state = Column(String(100))
+    city = Column(String(100))
+    service_radius = Column(Integer)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    vendor_profile = relationship("VendorProfile")
+
+
+class VendorWorkforce(Base):
+    __tablename__ = "vendor_workforces"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    total_engineers = Column(Integer, default=0)
+    certified_engineers = Column(Integer, default=0)
+    support_staff = Column(Integer, default=0)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    vendor_profile = relationship("VendorProfile")
+
+
+class VendorBankDetail(Base):
+    __tablename__ = "vendor_bank_details"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    account_holder_name = Column(String(255))
+    bank_name = Column(String(255))
+    account_number = Column(String(100))
+    ifsc_code = Column(String(50))
+    branch_name = Column(String(255))
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    vendor_profile = relationship("VendorProfile")
+
+
+class VendorNotificationPreference(Base):
+    __tablename__ = "vendor_notification_preferences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    email_notification = Column(Boolean, default=True)
+    sms_notification = Column(Boolean, default=False)
+    push_notification = Column(Boolean, default=True)
+
+    vendor_profile = relationship("VendorProfile")
+
+
+class CustomerIdentity(Base):
+    __tablename__ = "customer_identities"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    identity_type = Column(
+        String(100),
+        nullable=True
+    )
+
+    identity_number = Column(
+        String(255),
+        nullable=True
+    )
+
+    front_image = Column(
+        Text,
+        nullable=True
+    )
+
+    back_image = Column(
+        Text,
+        nullable=True
+    )
+
+    verified = Column(
+        Boolean,
+        default=False
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    profile = relationship(
+       "UserProfile",
+        back_populates="customer_identity"
+    )
+
+
+class CustomerBusiness(Base):
+    __tablename__ = "customer_businesses"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    company_name = Column(
+        String(255),
+        nullable=True
+    )
+
+    business_type = Column(
+        String(100),
+        nullable=True
+    )
+
+    industry = Column(
+        String(255),
+        nullable=True
+    )
+
+    website = Column(
+        Text,
+        nullable=True
+    )
+
+    office_address = Column(
+        Text,
+        nullable=True
+    )
+
+    city = Column(
+        String(100),
+        nullable=True
+    )
+
+    state = Column(
+        String(100),
+        nullable=True
+    )
+
+    pincode = Column(
+        String(20),
+        nullable=True
+    )
+
+    latitude = Column(
+        String(50),
+        nullable=True
+    )
+
+    longitude = Column(
+        String(50),
+        nullable=True
+    )
+
+    gst_number = Column(
+        String(100),
+        nullable=True
+    )
+
+    tax_number = Column(
+        String(100),
+        nullable=True
+    )
+
+    authorized_person_name = Column(
+        String(255),
+        nullable=True
+    )
+
+    designation = Column(
+        String(100),
+        nullable=True
+    )
+
+    work_email = Column(
+        String(255),
+        nullable=True
+    )
+
+    work_phone = Column(
+        String(20),
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    profile = relationship(
+       "UserProfile",
+        back_populates="customer_business"
+    )
+
+
+class CustomerDocument(Base):
+    __tablename__ = "customer_documents"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    gst_certificate = Column(
+        Text,
+        nullable=True
+    )
+
+    tax_identification_card = Column(
+        Text,
+        nullable=True
+    )
+
+    company_registration_certificate = Column(
+        Text,
+        nullable=True
+    )
+
+    moa_aoa = Column(
+        Text,
+        nullable=True
+    )
+
+    bank_account_proof = Column(
+        Text,
+        nullable=True
+    )
+
+    other_document = Column(
+        Text,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    profile = relationship(
+       "UserProfile",
+        back_populates="customer_documents"
+    )
+
+
+
+
+
+
 
 # class VendorContactPerson(Base):
 #     __tablename__ = "vendor_contact_persons"

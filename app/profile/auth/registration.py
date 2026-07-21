@@ -6,7 +6,11 @@ from passlib.hash import pbkdf2_sha256
 
 from app.core.database import get_db
 
-from app.profile.models import User
+from app.profile.models import (
+    User,
+    VendorProfile,
+    UserRole
+)
 from app.profile.schemas import (
     SignupSchema,
     SigninSchema,
@@ -33,10 +37,10 @@ async def signup(
     payload: SignupSchema,
     db: Session = Depends(get_db)
 ):
+    # Check if email already exists
     result = db.execute(
         select(User).where(User.email == payload.email)
     )
-    
 
     existing_user = result.scalars().first()
 
@@ -46,6 +50,7 @@ async def signup(
             detail="Email already registered"
         )
 
+    # Create User
     user = User(
         email=payload.email,
         password_hash=pbkdf2_sha256.hash(payload.password),
@@ -55,9 +60,21 @@ async def signup(
 
     db.add(user)
     db.commit()
+    db.refresh(user)
+
+    # Create Vendor Profile only for Vendor
+    if payload.role == UserRole.VENDOR:
+
+        vendor_profile = VendorProfile(
+            user_id=user.id
+        )
+
+        db.add(vendor_profile)
+        db.commit()
 
     return {
-        "message": "User registered successfully"
+        "message": "User registered successfully",
+        "role": user.role.value
     }
 
 
