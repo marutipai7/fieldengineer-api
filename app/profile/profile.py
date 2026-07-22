@@ -4,6 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from passlib.hash import pbkdf2_sha256
+from fastapi import Form, File, UploadFile
+import shutil
+import os
+from fastapi import Request
+from datetime import date
+
 
 from app.profile.schemas import VendorProfileSchema
 
@@ -97,69 +103,6 @@ def get_user_and_profile(
 #             "profile_image": profile.profile_image if profile else None
 #         }
 #     }
-@router.get("/me")
-async def get_profile(
-    current_user_email: str = Depends(get_current_user_email),
-    db: Session = Depends(get_db)
-):
-    user, profile = get_user_and_profile(
-        current_user_email,
-        db
-    )
-
-    if not profile:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found"
-        )
-
-    document = db.execute(
-        select(FieldEngineerDocument).where(
-            FieldEngineerDocument.user_profile_id == profile.id
-        )
-    ).scalars().first()
-
-    availability = db.execute(
-        select(FieldEngineerAvailability).where(
-            FieldEngineerAvailability.field_engineer_id == profile.id
-        )
-    ).scalars().all()
-
-    return {
-        "email": user.email,
-        "phone_number": user.phone_number,
-        "role": user.role.value,
-
-        "profile": {
-            "full_name": profile.full_name,
-            "date_of_birth": profile.date_of_birth,
-            "gender": profile.gender,
-            "profile_image": profile.profile_image,
-            "is_associated_with_vendor": profile.is_associated_with_vendor,
-            "vendor_id": profile.vendor_id,
-            "years_of_experience_id": profile.years_of_experience_id,
-            "primary_specialization_id": profile.primary_specialization_id
-        },
-
-        "documents": {
-            "identity_proof": document.identity_proof if document else None,
-            "education_certificate": document.education_certificate if document else None,
-            "work_company_id": document.work_company_id if document else None,
-            "certification": document.certification if document else None,
-            "experience_certificate": document.experience_certificate if document else None,
-            "driving_license": document.driving_license if document else None
-        },
-
-        "availability": [
-            {
-                "day_of_week": item.day_of_week,
-                "start_time": item.start_time,
-                "end_time": item.end_time,
-                "is_available": item.is_available
-            }
-            for item in availability
-        ]
-    }
 
 # @router.put("/update")
 # async def update_profile(
@@ -189,97 +132,7 @@ async def get_profile(
 #         "message": "Profile updated successfully"
 #     }
 
-@router.put("/update")
-async def update_profile(
-    payload: FieldEngineerProfileSchema,
-    current_user_email: str = Depends(get_current_user_email),
-    db: Session = Depends(get_db)
-):
-    user, profile = get_user_and_profile(
-        current_user_email,
-        db
-    )
 
-    if not profile:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found"
-        )
-
-    # ----------------------------
-    # Update Profile
-    # ----------------------------
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
-
-    profile.is_associated_with_vendor = (
-        payload.is_associated_with_vendor
-    )
-
-    profile.vendor_id = payload.vendor_id
-
-    profile.years_of_experience_id = (
-        payload.years_of_experience_id
-    )
-
-    profile.primary_specialization_id = (
-        payload.primary_specialization_id
-    )
-
-    # ----------------------------
-    # Update Documents
-    # ----------------------------
-    if payload.documents:
-
-        document = db.execute(
-            select(FieldEngineerDocument).where(
-                FieldEngineerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        if not document:
-            document = FieldEngineerDocument(
-                user_profile_id=profile.id
-            )
-            db.add(document)
-
-        document.identity_proof = payload.documents.identity_proof
-        document.education_certificate = payload.documents.education_certificate
-        document.work_company_id = payload.documents.work_company_id
-        document.certification = payload.documents.certification
-        document.experience_certificate = payload.documents.experience_certificate
-        document.driving_license = payload.documents.driving_license
-
-    # ----------------------------
-    # Update Availability
-    # ----------------------------
-    if payload.availability:
-
-        db.query(FieldEngineerAvailability).filter(
-            FieldEngineerAvailability.field_engineer_id == profile.id
-        ).delete()
-
-        for item in payload.availability:
-
-            availability = FieldEngineerAvailability(
-                field_engineer_id=profile.id,
-                day_of_week=item.day_of_week,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                is_available=item.is_available
-            )
-
-            db.add(availability)
-
-    db.commit()
-    db.refresh(profile)
-
-    return {
-        "message": "Field Engineer profile updated successfully",
-        "profile_id": profile.id
-    }
 
 @router.post("/address")
 async def create_address(
@@ -355,9 +208,35 @@ async def get_addresses(
         }
         for address in addresses
     ]
-@router.post("/signin")
-async def field_engineer_signin(
-    payload: SigninSchema,
+@router.post("/complete-profile")
+async def complete_field_engineer_profile(
+
+    full_name: str = Form(...),
+    date_of_birth: date = Form(None),
+    gender: str = Form(None),
+
+    is_associated_with_vendor: bool = Form(False),
+
+    vendor_id: int = Form(None),
+    years_of_experience_id: int = Form(None),
+    primary_specialization_id: int = Form(None),
+
+    primary_city: str = Form(None),
+    service_radius: int = Form(None),
+    preferred_work_areas: str = Form(None),
+    latitude: str = Form(None),
+    longitude: str = Form(None),
+
+    profile_image: UploadFile = File(None),
+
+    identity_proof: UploadFile = File(None),
+    education_certificate: UploadFile = File(None),
+    work_company_id: UploadFile = File(None),
+    certification: UploadFile = File(None),
+    experience_certificate: UploadFile = File(None),
+    driving_license: UploadFile = File(None),
+
+    current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
     result = db.execute(
@@ -399,7 +278,7 @@ async def field_engineer_signin(
     }
 
 @router.post("/complete-profile")
-async def complete_profile(
+async def complete_field_engineer_profile(
     payload: FieldEngineerProfileSchema,
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
@@ -518,6 +397,170 @@ async def complete_profile(
         "profile_id": profile.id
     }
 
+
+@router.get("/profile")
+async def get_field_engineer_profile(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile not found"
+        )
+
+    document = db.execute(
+        select(FieldEngineerDocument).where(
+            FieldEngineerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    availability = db.execute(
+        select(FieldEngineerAvailability).where(
+            FieldEngineerAvailability.field_engineer_id == profile.id
+        )
+    ).scalars().all()
+
+    return {
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "role": user.role.value,
+
+        "profile": {
+            "full_name": profile.full_name,
+            "date_of_birth": profile.date_of_birth,
+            "gender": profile.gender,
+            "profile_image": profile.profile_image,
+            "is_associated_with_vendor": profile.is_associated_with_vendor,
+            "vendor_id": profile.vendor_id,
+            "years_of_experience_id": profile.years_of_experience_id,
+            "primary_specialization_id": profile.primary_specialization_id
+        },
+
+        "documents": {
+            "identity_proof": document.identity_proof if document else None,
+            "education_certificate": document.education_certificate if document else None,
+            "work_company_id": document.work_company_id if document else None,
+            "certification": document.certification if document else None,
+            "experience_certificate": document.experience_certificate if document else None,
+            "driving_license": document.driving_license if document else None
+        },
+
+        "availability": [
+            {
+                "day_of_week": item.day_of_week,
+                "start_time": item.start_time,
+                "end_time": item.end_time,
+                "is_available": item.is_available
+            }
+            for item in availability
+        ]
+    }
+
+
+
+
+@router.put("/profile")
+async def update_field_engineer_profile(
+    payload: FieldEngineerProfileSchema,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile not found"
+        )
+
+    # ----------------------------
+    # Update Profile
+    # ----------------------------
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
+
+    profile.is_associated_with_vendor = (
+        payload.is_associated_with_vendor
+    )
+
+    profile.vendor_id = payload.vendor_id
+
+    profile.years_of_experience_id = (
+        payload.years_of_experience_id
+    )
+
+    profile.primary_specialization_id = (
+        payload.primary_specialization_id
+    )
+
+    # ----------------------------
+    # Update Documents
+    # ----------------------------
+    if payload.documents:
+
+        document = db.execute(
+            select(FieldEngineerDocument).where(
+                FieldEngineerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not document:
+            document = FieldEngineerDocument(
+                user_profile_id=profile.id
+            )
+            db.add(document)
+
+        document.identity_proof = payload.documents.identity_proof
+        document.education_certificate = payload.documents.education_certificate
+        document.work_company_id = payload.documents.work_company_id
+        document.certification = payload.documents.certification
+        document.experience_certificate = payload.documents.experience_certificate
+        document.driving_license = payload.documents.driving_license
+
+    # ----------------------------
+    # Update Availability
+    # ----------------------------
+    if payload.availability:
+
+        db.query(FieldEngineerAvailability).filter(
+            FieldEngineerAvailability.field_engineer_id == profile.id
+        ).delete()
+
+        for item in payload.availability:
+
+            availability = FieldEngineerAvailability(
+                field_engineer_id=profile.id,
+                day_of_week=item.day_of_week,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                is_available=item.is_available
+            )
+
+            db.add(availability)
+
+    db.commit()
+    db.refresh(profile)
+
+    return {
+        "message": "Field Engineer profile updated successfully",
+        "profile_id": profile.id
+    }
+
+
+
+
+
 @router.post("/vendor/signin")
 async def vendor_signin(
     payload: SigninSchema,
@@ -563,11 +606,72 @@ async def vendor_signin(
 
 
 @router.post("/vendor/complete-profile")
+# async def vendor_complete_profile(
+#     payload: VendorProfileSchema,
+# async def vendor_complete_profile(
 async def vendor_complete_profile(
-    payload: VendorProfileSchema,
+    request: Request,
+
+    company_name: str = Form(...),
+    owner_manager_name: str = Form(...),
+
+    # vendor_type: str = Form(...),
+    vendor_type: str = Form(None),
+    # legal_business_name: str = Form(...),
+    legal_business_name: str = Form(None),
+    # business_type: str = Form(...),
+    business_type: str = Form(None),
+
+    industry: str = Form(None),
+
+    company_registration_number: str = Form(None),
+    gst_number: str = Form(None),
+    pan_number: str = Form(None),
+
+    website: str = Form(None),
+    years_in_business: int = Form(None),
+    employee_count: int = Form(None),
+
+    primary_service_category: str = Form(None),
+    about_business: str = Form(None),
+
+    address: str = Form(None),
+    city: str = Form(None),
+    state: str = Form(None),
+    pincode: str = Form(None),
+
+    timezone: str = Form(None),
+    working_hours: str = Form(None),
+
+    # profile_image: UploadFile = File(...),
+
+    # gst_certificate: UploadFile = File(...),
+    # pan_card: UploadFile = File(...),
+    # registration_certificate: UploadFile = File(...),
+    # cancelled_cheque: UploadFile = File(...),
+    # other_document: UploadFile = File(...),
+
+
+    profile_image: UploadFile = File(None),
+
+    gst_certificate: UploadFile = File(None),
+    pan_card: UploadFile = File(None),
+    registration_certificate: UploadFile = File(None),
+    cancelled_cheque: UploadFile = File(None),
+    other_document: UploadFile = File(None),
+
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
+    
+    form = await request.form()
+
+    print("========== FORM DATA ==========")
+
+    for key, value in form.items():
+       print(key, "=", value)
+
+    print("===============================")
     user = db.execute(
         select(User).where(
             User.email == current_user_email
@@ -602,206 +706,236 @@ async def vendor_complete_profile(
     # Save Vendor Profile
     # ----------------------------
 
-    profile.company_name = payload.company_name
-    profile.owner_manager_name = payload.owner_manager_name
+    # profile.company_name = payload.company_name
+    # profile.owner_manager_name = payload.owner_manager_name
+    print("company_name =", company_name)
+    print("vendor_type =", vendor_type)
+    print("legal_business_name =", legal_business_name)
+    print("business_type =", business_type)
+    print("industry =", industry)
+    print("gst_number =", gst_number)
+    print("website =", website)
+    print("years_in_business =", years_in_business)
+    profile.company_name = company_name
+    profile.owner_manager_name = owner_manager_name
+    profile.vendor_type = vendor_type
+    profile.legal_business_name = legal_business_name
+    profile.business_type = business_type
+    profile.industry = industry
 
-    profile.vendor_type = payload.vendor_type
-    profile.legal_business_name = payload.legal_business_name
-    profile.business_type = payload.business_type
-    profile.industry = payload.industry
+    profile.company_registration_number = company_registration_number
+    profile.gst_number = gst_number
+    profile.pan_number = pan_number
 
-    profile.company_registration_number = (
-        payload.company_registration_number
-    )
+    profile.website = website
+    profile.years_in_business = years_in_business
 
-    profile.gst_number = payload.gst_number
-    profile.pan_number = payload.pan_number
+    profile.employee_count = employee_count
 
-    profile.website = payload.website
+    profile.primary_service_category = primary_service_category
+    profile.about_business = about_business
 
-    profile.years_in_business = (
-        payload.years_in_business
-    )
+    profile.address = address
+    profile.city = city
+    profile.state = state
+    profile.pincode = pincode
 
-    profile.company_registration_date = (
-        payload.company_registration_date
-    )
+    profile.timezone = timezone
+    profile.working_hours = working_hours
 
-    profile.employee_count = payload.employee_count
+    if profile_image:
+        os.makedirs("uploads/vendor", exist_ok=True)
 
-    profile.primary_service_category = (
-        payload.primary_service_category
-    )
+        image_path = f"uploads/vendor/{profile_image.filename}"
 
-    profile.about_business = (
-        payload.about_business
-    )
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(profile_image.file, buffer)
 
-    profile.address = payload.address
-    profile.city = payload.city
-    profile.state = payload.state
-    profile.pincode = payload.pincode
-
-    profile.timezone = payload.timezone
-    profile.working_hours = payload.working_hours
-
-    profile.profile_image = payload.profile_image
-        # ----------------------------
+        profile.profile_image = image_path
+    # ----------------------------
     # Save Vendor Documents
     # ----------------------------
-    if payload.documents:
+   # ----------------------------
+   # Save Vendor Documents
+   # ----------------------------
 
-        document = db.execute(
-            select(VendorDocument).where(
-                VendorDocument.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        if not document:
-            document = VendorDocument(
-                vendor_profile_id=profile.id
-            )
-            db.add(document)
-
-        document.gst_certificate = (
-            payload.documents.gst_certificate
+    document = db.execute(
+        select(VendorDocument).where(
+           VendorDocument.vendor_profile_id == profile.id
         )
+    ).scalars().first()
 
-        document.pan_card = (
-            payload.documents.pan_card
+    if not document:
+        document = VendorDocument(
+          vendor_profile_id=profile.id
         )
+        db.add(document)
 
-        document.registration_certificate = (
-            payload.documents.registration_certificate
-        )
+    os.makedirs("uploads/vendor", exist_ok=True)
 
-        document.cancelled_cheque = (
-            payload.documents.cancelled_cheque
-        )
+    if gst_certificate:
+        gst_path = f"uploads/vendor/{gst_certificate.filename}"
 
-        document.other_document = (
-            payload.documents.other_document
-        )
-    
+        with open(gst_path, "wb") as buffer:
+            shutil.copyfileobj(gst_certificate.file, buffer)
+
+        document.gst_certificate = gst_path
+
+    if pan_card:
+        pan_path = f"uploads/vendor/{pan_card.filename}"
+
+        with open(pan_path, "wb") as buffer:
+            shutil.copyfileobj(pan_card.file, buffer)
+
+        document.pan_card = pan_path
+
+    if registration_certificate:
+        reg_path = f"uploads/vendor/{registration_certificate.filename}"
+
+        with open(reg_path, "wb") as buffer:
+            shutil.copyfileobj(registration_certificate.file, buffer)
+
+        document.registration_certificate = reg_path
+
+    if cancelled_cheque:
+       cheque_path = f"uploads/vendor/{cancelled_cheque.filename}"
+
+       with open(cheque_path, "wb") as buffer:
+            shutil.copyfileobj(cancelled_cheque.file, buffer)
+
+       document.cancelled_cheque = cheque_path
+
+    if other_document:
+        other_path = f"uploads/vendor/{other_document.filename}"
+
+        with open(other_path, "wb") as buffer:
+           shutil.copyfileobj(other_document.file, buffer)
+
+        document.other_document = other_path
     # ----------------------------
     # Save Service Coverage
     # ----------------------------
-    if payload.service_coverage:
+    # if payload.service_coverage:
 
-        db.query(VendorServiceCoverage).filter(
-            VendorServiceCoverage.vendor_profile_id == profile.id
-        ).delete()
+    #     db.query(VendorServiceCoverage).filter(
+    #         VendorServiceCoverage.vendor_profile_id == profile.id
+    #     ).delete()
 
-        for item in payload.service_coverage:
+    #     for item in payload.service_coverage:
 
-            coverage = VendorServiceCoverage(
-                vendor_profile_id=profile.id,
-                state=item.state,
-                city=item.city,
-                service_radius=item.service_radius
-            )
+    #         coverage = VendorServiceCoverage(
+    #             vendor_profile_id=profile.id,
+    #             state=item.state,
+    #             city=item.city,
+    #             service_radius=item.service_radius
+    #         )
 
-            db.add(coverage)
+    #         db.add(coverage)
             # ----------------------------
     # Save Workforce
     # ----------------------------
-    if payload.workforce:
+    # if payload.workforce:
 
-        workforce = db.execute(
-            select(VendorWorkforce).where(
-                VendorWorkforce.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+    #     workforce = db.execute(
+    #         select(VendorWorkforce).where(
+    #             VendorWorkforce.vendor_profile_id == profile.id
+    #         )
+    #     ).scalars().first()
 
-        if not workforce:
-            workforce = VendorWorkforce(
-                vendor_profile_id=profile.id
-            )
-            db.add(workforce)
+    #     if not workforce:
+    #         workforce = VendorWorkforce(
+    #             vendor_profile_id=profile.id
+    #         )
+    #         db.add(workforce)
 
-        workforce.total_engineers = (
-            payload.workforce.total_engineers
-        )
+    #     workforce.total_engineers = (
+    #         payload.workforce.total_engineers
+    #     )
 
-        workforce.certified_engineers = (
-            payload.workforce.certified_engineers
-        )
+    #     workforce.certified_engineers = (
+    #         payload.workforce.certified_engineers
+    #     )
 
-        workforce.support_staff = (
-            payload.workforce.support_staff
-        )
+    #     workforce.support_staff = (
+    #         payload.workforce.support_staff
+    #     )
         # ----------------------------
-    # Save Bank Details
-    # ----------------------------
-    if payload.bank_details:
+    # # Save Bank Details
+    # # ----------------------------
+    # if payload.bank_details:
 
-        bank = db.execute(
-            select(VendorBankDetail).where(
-                VendorBankDetail.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+    #     bank = db.execute(
+    #         select(VendorBankDetail).where(
+    #             VendorBankDetail.vendor_profile_id == profile.id
+    #         )
+    #     ).scalars().first()
 
-        if not bank:
-            bank = VendorBankDetail(
-                vendor_profile_id=profile.id
-            )
-            db.add(bank)
+    #     if not bank:
+    #         bank = VendorBankDetail(
+    #             vendor_profile_id=profile.id
+    #         )
+    #         db.add(bank)
 
-        bank.account_holder_name = (
-            payload.bank_details.account_holder_name
-        )
+    #     bank.account_holder_name = (
+    #         payload.bank_details.account_holder_name
+    #     )
 
-        bank.bank_name = (
-            payload.bank_details.bank_name
-        )
+    #     bank.bank_name = (
+    #         payload.bank_details.bank_name
+    #     )
 
-        bank.account_number = (
-            payload.bank_details.account_number
-        )
+    #     bank.account_number = (
+    #         payload.bank_details.account_number
+    #     )
 
-        bank.ifsc_code = (
-            payload.bank_details.ifsc_code
-        )
+    #     bank.ifsc_code = (
+    #         payload.bank_details.ifsc_code
+    #     )
 
-        bank.branch_name = (
-            payload.bank_details.branch_name
-        )
-        # ----------------------------
-    # Save Notification Preferences
-    # ----------------------------
-    if payload.notification_preferences:
+    #     bank.branch_name = (
+    #         payload.bank_details.branch_name
+    #     )
+    #     # ----------------------------
+    # # Save Notification Preferences
+    # # ----------------------------
+    # if payload.notification_preferences:
 
-        notification = db.execute(
-            select(VendorNotificationPreference).where(
-                VendorNotificationPreference.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+    #     notification = db.execute(
+    #         select(VendorNotificationPreference).where(
+    #             VendorNotificationPreference.vendor_profile_id == profile.id
+    #         )
+    #     ).scalars().first()
 
-        if not notification:
-            notification = VendorNotificationPreference(
-                vendor_profile_id=profile.id
-            )
-            db.add(notification)
+    #     if not notification:
+    #         notification = VendorNotificationPreference(
+    #             vendor_profile_id=profile.id
+    #         )
+    #         db.add(notification)
 
-        notification.email_notification = (
-            payload.notification_preferences.email_notification
-        )
+    #     notification.email_notification = (
+    #         payload.notification_preferences.email_notification
+    #     )
 
-        notification.sms_notification = (
-            payload.notification_preferences.sms_notification
-        )
+    #     notification.sms_notification = (
+    #         payload.notification_preferences.sms_notification
+    #     )
 
-        notification.push_notification = (
-            payload.notification_preferences.push_notification
-        )
-        db.commit()
-        db.refresh(profile)
+    #     notification.push_notification = (
+    #         payload.notification_preferences.push_notification
+    #     )
+    print(profile.vendor_type)
+    print(profile.legal_business_name)
+    print(profile.business_type)
+    print(profile.industry)
+    print(profile.gst_number)
+    db.commit()
+    db.refresh(profile)
 
-        return {
-           "message": "Vendor profile completed successfully",
-           "profile_id": profile.id
-        }
-
+    return {
+        "message": "Vendor profile completed successfully",
+        "profile_id": profile.id
+    }
+    
 
 @router.get("/vendor/profile")
 async def get_vendor_profile(
@@ -934,10 +1068,46 @@ async def get_vendor_profile(
 
 @router.put("/vendor/profile")
 async def update_vendor_profile(
-    payload: VendorProfileSchema,
+
+    company_name: str = Form(...),
+    owner_manager_name: str = Form(...),
+
+    vendor_type: str = Form(None),
+    legal_business_name: str = Form(None),
+    business_type: str = Form(None),
+    industry: str = Form(None),
+
+    company_registration_number: str = Form(None),
+    gst_number: str = Form(None),
+    pan_number: str = Form(None),
+
+    website: str = Form(None),
+    years_in_business: int = Form(None),
+    employee_count: int = Form(None),
+
+    primary_service_category: str = Form(None),
+    about_business: str = Form(None),
+
+    address: str = Form(None),
+    city: str = Form(None),
+    state: str = Form(None),
+    pincode: str = Form(None),
+
+    timezone: str = Form(None),
+    working_hours: str = Form(None),
+
+    profile_image: UploadFile = File(None),
+
+    gst_certificate: UploadFile = File(None),
+    pan_card: UploadFile = File(None),
+    registration_certificate: UploadFile = File(None),
+    cancelled_cheque: UploadFile = File(None),
+    other_document: UploadFile = File(None),
+
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
+
     user = db.execute(
         select(User).where(
             User.email == current_user_email
@@ -972,147 +1142,102 @@ async def update_vendor_profile(
     # Update Vendor Profile
     # ----------------------------
 
-    profile.company_name = payload.company_name
-    profile.owner_manager_name = payload.owner_manager_name
-    profile.vendor_type = payload.vendor_type
-    profile.legal_business_name = payload.legal_business_name
-    profile.business_type = payload.business_type
-    profile.industry = payload.industry
+    profile.company_name = company_name
+    profile.owner_manager_name = owner_manager_name
 
-    profile.company_registration_number = payload.company_registration_number
-    profile.gst_number = payload.gst_number
-    profile.pan_number = payload.pan_number
+    profile.vendor_type = vendor_type
+    profile.legal_business_name = legal_business_name
+    profile.business_type = business_type
+    profile.industry = industry
 
-    profile.website = payload.website
-    profile.years_in_business = payload.years_in_business
-    profile.company_registration_date = payload.company_registration_date
-    profile.employee_count = payload.employee_count
+    profile.company_registration_number = company_registration_number
+    profile.gst_number = gst_number
+    profile.pan_number = pan_number
 
-    profile.primary_service_category = payload.primary_service_category
-    profile.about_business = payload.about_business
+    profile.website = website
+    profile.years_in_business = years_in_business
+    profile.employee_count = employee_count
 
-    profile.address = payload.address
-    profile.city = payload.city
-    profile.state = payload.state
-    profile.pincode = payload.pincode
+    profile.primary_service_category = primary_service_category
+    profile.about_business = about_business
 
-    profile.timezone = payload.timezone
-    profile.working_hours = payload.working_hours
-    profile.profile_image = payload.profile_image
+    profile.address = address
+    profile.city = city
+    profile.state = state
+    profile.pincode = pincode
 
-    # ----------------------------
-    # Update Documents
-    # ----------------------------
-
-    if payload.documents:
-
-        document = db.execute(
-            select(VendorDocument).where(
-                VendorDocument.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        if not document:
-            document = VendorDocument(
-                vendor_profile_id=profile.id
-            )
-            db.add(document)
-
-        document.gst_certificate = payload.documents.gst_certificate
-        document.pan_card = payload.documents.pan_card
-        document.registration_certificate = payload.documents.registration_certificate
-        document.cancelled_cheque = payload.documents.cancelled_cheque
-        document.other_document = payload.documents.other_document
+    profile.timezone = timezone
+    profile.working_hours = working_hours
 
     # ----------------------------
-    # Update Service Coverage
+    # Update Profile Image
     # ----------------------------
 
-    if payload.service_coverage:
+    os.makedirs("uploads/vendor", exist_ok=True)
 
-        db.query(VendorServiceCoverage).filter(
-            VendorServiceCoverage.vendor_profile_id == profile.id
-        ).delete()
+    if profile_image:
+        image_path = f"uploads/vendor/{profile_image.filename}"
 
-        for item in payload.service_coverage:
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(profile_image.file, buffer)
 
-            coverage = VendorServiceCoverage(
-                vendor_profile_id=profile.id,
-                state=item.state,
-                city=item.city,
-                service_radius=item.service_radius
-            )
-
-            db.add(coverage)
+        profile.profile_image = image_path
 
     # ----------------------------
-    # Update Workforce
+    # Update Vendor Documents
     # ----------------------------
 
-    if payload.workforce:
+    document = db.execute(
+        select(VendorDocument).where(
+            VendorDocument.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
 
-        workforce = db.execute(
-            select(VendorWorkforce).where(
-                VendorWorkforce.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+    if not document:
+        document = VendorDocument(
+            vendor_profile_id=profile.id
+        )
+        db.add(document)
 
-        if not workforce:
-            workforce = VendorWorkforce(
-                vendor_profile_id=profile.id
-            )
-            db.add(workforce)
+    if gst_certificate:
+        gst_path = f"uploads/vendor/{gst_certificate.filename}"
 
-        workforce.total_engineers = payload.workforce.total_engineers
-        workforce.certified_engineers = payload.workforce.certified_engineers
-        workforce.support_staff = payload.workforce.support_staff
+        with open(gst_path, "wb") as buffer:
+            shutil.copyfileobj(gst_certificate.file, buffer)
 
-    # ----------------------------
-    # Update Bank Details
-    # ----------------------------
+        document.gst_certificate = gst_path
 
-    if payload.bank_details:
+    if pan_card:
+        pan_path = f"uploads/vendor/{pan_card.filename}"
 
-        bank = db.execute(
-            select(VendorBankDetail).where(
-                VendorBankDetail.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+        with open(pan_path, "wb") as buffer:
+            shutil.copyfileobj(pan_card.file, buffer)
 
-        if not bank:
-            bank = VendorBankDetail(
-                vendor_profile_id=profile.id
-            )
-            db.add(bank)
+        document.pan_card = pan_path
 
-        bank.account_holder_name = payload.bank_details.account_holder_name
-        bank.bank_name = payload.bank_details.bank_name
-        bank.account_number = payload.bank_details.account_number
-        bank.ifsc_code = payload.bank_details.ifsc_code
-        bank.branch_name = payload.bank_details.branch_name
+    if registration_certificate:
+        reg_path = f"uploads/vendor/{registration_certificate.filename}"
 
-    # ----------------------------
-    # Update Notification
-    # ----------------------------
+        with open(reg_path, "wb") as buffer:
+            shutil.copyfileobj(registration_certificate.file, buffer)
 
-    if payload.notification_preferences:
+        document.registration_certificate = reg_path
 
-        notification = db.execute(
-            select(VendorNotificationPreference).where(
-                VendorNotificationPreference.vendor_profile_id == profile.id
-            )
-        ).scalars().first()
+    if cancelled_cheque:
+        cheque_path = f"uploads/vendor/{cancelled_cheque.filename}"
 
-        if not notification:
-            notification = VendorNotificationPreference(
-                vendor_profile_id=profile.id
-            )
-            db.add(notification)
+        with open(cheque_path, "wb") as buffer:
+            shutil.copyfileobj(cancelled_cheque.file, buffer)
 
-        notification.email_notification = payload.notification_preferences.email_notification
-        notification.sms_notification = payload.notification_preferences.sms_notification
-        notification.push_notification = payload.notification_preferences.push_notification
+        document.cancelled_cheque = cheque_path
 
+    if other_document:
+        other_path = f"uploads/vendor/{other_document.filename}"
+
+        with open(other_path, "wb") as buffer:
+            shutil.copyfileobj(other_document.file, buffer)
+
+        document.other_document = other_path
     db.commit()
     db.refresh(profile)
 
@@ -1120,5 +1245,3 @@ async def update_vendor_profile(
         "message": "Vendor profile updated successfully",
         "profile_id": profile.id
     }
-
-
