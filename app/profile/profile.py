@@ -1,4 +1,5 @@
 import profile
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -9,11 +10,18 @@ import shutil
 import os
 from fastapi import Request
 from datetime import date
+from typing import Optional
 
 
 from app.profile.schemas import VendorProfileSchema
 
 from app.profile.models import (
+    User,
+    UserRole,
+    UserProfile,
+    CustomerIdentity,
+    CustomerBusiness,
+    CustomerDocument,
     VendorProfile,
     VendorDocument,
     VendorServiceCoverage,
@@ -21,8 +29,6 @@ from app.profile.models import (
     VendorBankDetail,
     VendorNotificationPreference,
 )
-
-
 
 from app.utils.auth_utils import (
     create_access_token,
@@ -208,6 +214,7 @@ async def get_addresses(
         }
         for address in addresses
     ]
+
 @router.post("/complete-profile")
 async def complete_field_engineer_profile(
 
@@ -1243,5 +1250,534 @@ async def update_vendor_profile(
 
     return {
         "message": "Vendor profile updated successfully",
+        "profile_id": profile.id
+    }
+
+# Complete Customer Profile
+
+@router.post("/customer/complete-profile")
+async def complete_customer_profile(
+
+    # Personal Details
+    full_name: str = Form(...),
+    date_of_birth: date = Form(...),
+    gender: str = Form(...),
+    profile_image: UploadFile = File(None),
+    email: str = Form(...),
+    phone_number: str = Form(...),
+
+    # Identity
+    identity_type: str = Form(...),
+    identity_number: str = Form(...),
+    front_image: UploadFile = File(None),
+    back_image: UploadFile = File(None),
+
+    # Business
+    company_name: str = Form(...),
+    business_type: str = Form(...),
+    industry: str = Form(...),
+    website: Optional[str] = Form(None),
+    office_address: str = Form(...),
+    city: str = Form(...),
+    state: str = Form(...),
+    pincode: str = Form(...),
+    gst_number: Optional[str] = Form(None),
+    tax_number: Optional[str] = Form(None),
+    authorized_person_name: str = Form(...),
+    designation: str = Form(...),
+    work_email: str = Form(...),
+
+    # Documents
+    gst_certificate: UploadFile = File(None),
+    tax_identification_card: UploadFile = File(None),
+    company_registration_certificate: UploadFile = File(None),
+    moa_aoa: UploadFile = File(None),
+    bank_account_proof: UploadFile = File(None),
+
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Customer can complete profile"
+        )
+
+    if not profile:
+        profile = UserProfile(
+            user_id=user.id
+        )
+        db.add(profile)
+        db.flush()
+
+    os.makedirs("uploads", exist_ok=True)
+
+    def save_file(file: UploadFile):
+        if not file:
+            return None
+
+        filename = f"{uuid.uuid4()}_{file.filename}"
+        path = os.path.join("uploads", filename)
+
+        with open(path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        return path
+
+    # ---------------------------------------
+    # User Profile
+    # ---------------------------------------
+
+    profile.full_name = full_name
+    profile.date_of_birth = date_of_birth
+    profile.gender = gender
+
+    profile_image_path = save_file(profile_image)
+
+    if profile_image_path:
+        profile.profile_image = profile_image_path
+
+    user.email = email
+    user.phone_number = phone_number
+
+    # ---------------------------------------
+    # Customer Identity
+    # ---------------------------------------
+
+    identity = db.execute(
+        select(CustomerIdentity).where(
+            CustomerIdentity.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not identity:
+        identity = CustomerIdentity(
+            user_profile_id=profile.id
+        )
+        db.add(identity)
+
+    identity.identity_type = identity_type
+    identity.identity_number = identity_number
+
+    front_path = save_file(front_image)
+    if front_path:
+        identity.front_image = front_path
+
+    back_path = save_file(back_image)
+    if back_path:
+        identity.back_image = back_path
+
+    # ---------------------------------------
+    # Customer Business
+    # ---------------------------------------
+
+    business = db.execute(
+        select(CustomerBusiness).where(
+            CustomerBusiness.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not business:
+        business = CustomerBusiness(
+            user_profile_id=profile.id
+        )
+        db.add(business)
+
+    business.company_name = company_name
+    business.business_type = business_type
+    business.industry = industry
+    business.website = website
+    business.office_address = office_address
+    business.city = city
+    business.state = state
+    business.pincode = pincode
+    business.gst_number = gst_number
+    business.tax_number = tax_number
+    business.authorized_person_name = authorized_person_name
+    business.designation = designation
+    business.work_email = work_email
+    # ---------------------------------------
+    # Customer Documents
+    # ---------------------------------------
+
+    documents = db.execute(
+        select(CustomerDocument).where(
+            CustomerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not documents:
+        documents = CustomerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(documents)
+
+    gst_path = save_file(gst_certificate)
+    if gst_path:
+        documents.gst_certificate = gst_path
+
+    tax_path = save_file(tax_identification_card)
+    if tax_path:
+        documents.tax_identification_card = tax_path
+
+    company_path = save_file(company_registration_certificate)
+    if company_path:
+        documents.company_registration_certificate = company_path
+
+    moa_path = save_file(moa_aoa)
+    if moa_path:
+        documents.moa_aoa = moa_path
+
+    bank_path = save_file(bank_account_proof)
+    if bank_path:
+        documents.bank_account_proof = bank_path
+
+    db.commit()
+    db.refresh(profile)
+
+    return {
+        "message": "Customer profile completed successfully",
+        "profile_id": profile.id,
+        "email": user.email,
+        "phone_number": user.phone_number
+    }
+
+# Get Customer Profile
+
+@router.get("/customer/profile")
+async def get_customer_profile(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Customer can access profile"
+        )
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Customer profile not found"
+        )
+
+    identity = db.execute(
+        select(CustomerIdentity).where(
+            CustomerIdentity.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    business = db.execute(
+        select(CustomerBusiness).where(
+            CustomerBusiness.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    documents = db.execute(
+        select(CustomerDocument).where(
+            CustomerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    return {
+
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "role": user.role.value,
+
+        "profile": {
+            "full_name": profile.full_name,
+            "date_of_birth": profile.date_of_birth,
+            "gender": profile.gender,
+            "profile_image": profile.profile_image
+        },
+
+        "identity": {
+            "identity_type": identity.identity_type if identity else None,
+            "identity_number": identity.identity_number if identity else None,
+            "front_image": identity.front_image if identity else None,
+            "back_image": identity.back_image if identity else None,
+            "verified": identity.verified if identity else False
+        },
+
+        "business": {
+            "company_name": business.company_name if business else None,
+            "business_type": business.business_type if business else None,
+            "industry": business.industry if business else None,
+            "website": business.website if business else None,
+            "office_address": business.office_address if business else None,
+            "city": business.city if business else None,
+            "state": business.state if business else None,
+            "pincode": business.pincode if business else None,
+            "gst_number": business.gst_number if business else None,
+            "tax_number": business.tax_number if business else None,
+            "authorized_person_name": business.authorized_person_name if business else None,
+            "designation": business.designation if business else None,
+            "work_email": business.work_email if business else None,
+        },
+
+        "documents": {
+            "gst_certificate": documents.gst_certificate if documents else None,
+            "tax_identification_card": documents.tax_identification_card if documents else None,
+            "company_registration_certificate": documents.company_registration_certificate if documents else None,
+            "moa_aoa": documents.moa_aoa if documents else None,
+            "bank_account_proof": documents.bank_account_proof if documents else None,
+            "other_document": documents.other_document if documents else None,
+        }
+    }
+
+# Update Customer Profile
+
+@router.put("/customer/profile")
+async def update_customer_profile(
+
+    # Personal
+    full_name: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
+    date_of_birth: Optional[date] = Form(None),
+    gender: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+
+    profile_image: UploadFile = File(None),
+
+    # Identity
+    identity_type: Optional[str] = Form(None),
+    identity_number: Optional[str] = Form(None),
+
+    front_image: UploadFile = File(None),
+    back_image: UploadFile = File(None),
+
+    # Business
+    company_name: Optional[str] = Form(None),
+    business_type: Optional[str] = Form(None),
+    industry: Optional[str] = Form(None),
+    website: Optional[str] = Form(None),
+
+    office_address: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    state: Optional[str] = Form(None),
+    pincode: Optional[str] = Form(None),
+
+    gst_number: Optional[str] = Form(None),
+    tax_number: Optional[str] = Form(None),
+
+    authorized_person_name: Optional[str] = Form(None),
+    designation: Optional[str] = Form(None),
+    work_email: Optional[str] = Form(None),
+
+    # Documents
+    gst_certificate: UploadFile = File(None),
+    tax_identification_card: UploadFile = File(None),
+    company_registration_certificate: UploadFile = File(None),
+    moa_aoa: UploadFile = File(None),
+    bank_account_proof: UploadFile = File(None),
+
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if user.role != UserRole.USER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Customer can update profile"
+        )
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Customer profile not found"
+        )
+    
+    if email is not None:
+        raise HTTPException(
+        status_code=400,
+        detail="Primary email cannot be updated."
+        )
+
+    os.makedirs("uploads", exist_ok=True)
+
+    def save_file(file: UploadFile):
+        if not file:
+            return None
+
+        filename = f"{uuid.uuid4()}_{file.filename}"
+        file_path = os.path.join("uploads", filename)
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        return file_path
+
+    # -------------------------
+    # Update User
+    # -------------------------
+
+    if phone_number is not None:
+        user.phone_number = phone_number
+
+    # Email is taken from JWT/current_user_email.
+    # Do not allow updating the login email.
+
+    # -------------------------
+    # Update Profile
+    # -------------------------
+
+    if full_name is not None:
+        profile.full_name = full_name
+
+    if date_of_birth is not None:
+        profile.date_of_birth = date_of_birth
+
+    if gender is not None:
+        profile.gender = gender
+
+    image = save_file(profile_image)
+    if image:
+        profile.profile_image = image
+
+    # -------------------------
+    # Identity
+    # -------------------------
+
+    identity = db.execute(
+        select(CustomerIdentity).where(
+            CustomerIdentity.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not identity:
+        identity = CustomerIdentity(
+            user_profile_id=profile.id
+        )
+        db.add(identity)
+
+    if identity_type is not None:
+        identity.identity_type = identity_type
+
+    if identity_number is not None:
+        identity.identity_number = identity_number
+
+    front = save_file(front_image)
+    if front:
+        identity.front_image = front
+
+    back = save_file(back_image)
+    if back:
+        identity.back_image = back
+
+    # -------------------------
+    # Business
+    # -------------------------
+
+    business = db.execute(
+        select(CustomerBusiness).where(
+            CustomerBusiness.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not business:
+        business = CustomerBusiness(
+            user_profile_id=profile.id
+        )
+        db.add(business)
+
+    if company_name is not None:
+        business.company_name = company_name
+
+    if business_type is not None:
+        business.business_type = business_type
+
+    if industry is not None:
+        business.industry = industry
+
+    if website is not None:
+        business.website = website
+
+    if office_address is not None:
+        business.office_address = office_address
+
+    if city is not None:
+        business.city = city
+
+    if state is not None:
+        business.state = state
+
+    if pincode is not None:
+        business.pincode = pincode
+
+    if gst_number is not None:
+        business.gst_number = gst_number
+
+    if tax_number is not None:
+        business.tax_number = tax_number
+
+    if authorized_person_name is not None:
+        business.authorized_person_name = authorized_person_name
+
+    if designation is not None:
+        business.designation = designation
+
+    if work_email is not None:
+        business.work_email = work_email
+
+    # -------------------------
+    # Documents
+    # -------------------------
+
+    documents = db.execute(
+        select(CustomerDocument).where(
+            CustomerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not documents:
+        documents = CustomerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(documents)
+
+    gst = save_file(gst_certificate)
+    if gst:
+        documents.gst_certificate = gst
+
+    tax = save_file(tax_identification_card)
+    if tax:
+        documents.tax_identification_card = tax
+
+    company = save_file(company_registration_certificate)
+    if company:
+        documents.company_registration_certificate = company
+
+    moa = save_file(moa_aoa)
+    if moa:
+        documents.moa_aoa = moa
+
+    bank = save_file(bank_account_proof)
+    if bank:
+        documents.bank_account_proof = bank
+
+    db.commit()
+    db.refresh(profile)
+
+    return {
+        "success": True,
+        "message": "Customer profile updated successfully",
+        "email": user.email,
         "profile_id": profile.id
     }
