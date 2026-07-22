@@ -7,5 +7,5 @@ instance/
 *.log
 *.sqlite3
 *.db
-uplaods/
+uploads/
 documents/
