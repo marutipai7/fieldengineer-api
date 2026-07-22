@@ -215,8 +215,11 @@ async def get_addresses(
         for address in addresses
     ]
 
+
+
 @router.post("/complete-profile")
 async def complete_field_engineer_profile(
+    request: Request,
 
     full_name: str = Form(...),
     date_of_birth: date = Form(None),
@@ -246,55 +249,25 @@ async def complete_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-    result = db.execute(
-        select(User).where(User.email == payload.email)
-    )
+    print("========== FE COMPLETE PROFILE API CALLED ==========")
+    form = await request.form()
 
-    user = result.scalars().first()
+    print("===== FORM DATA =====")
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+    for key, value in form.items():
+      print(key, "=", value)
 
-    if user.role.value != "field_engineer":
-        raise HTTPException(
-            status_code=403,
-            detail="Only Field Engineer can login"
-        )
+    print("=====================")
+    
 
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-
-    access_token = create_access_token(
-        {"sub": user.email}
-    )
-
-    return {
-        "message": "Field Engineer signed in successfully",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": user.role.value
-    }
-
-@router.post("/complete-profile")
-async def complete_field_engineer_profile(
-    payload: FieldEngineerProfileSchema,
-    current_user_email: str = Depends(get_current_user_email),
-    db: Session = Depends(get_db)
-):
     user = db.execute(
         select(User).where(
             User.email == current_user_email
         )
     ).scalars().first()
+    print("========== POST USER ==========")
+    print("Current Email:", current_user_email)
+    print("User ID:", user.id)
 
     if not user:
         raise HTTPException(
@@ -320,81 +293,212 @@ async def complete_field_engineer_profile(
         )
         db.add(profile)
         db.flush()
+        print("Profile ID:", profile.id)
+        print("==============================")
 
     # ----------------------------
     # Save Profile
     # ----------------------------
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
+    # profile.full_name = payload.full_name
+    # profile.date_of_birth = payload.date_of_birth
+    # profile.gender = payload.gender
+    # profile.profile_image = payload.profile_image
+    if full_name is not None:
+        profile.full_name = full_name
 
-    profile.is_associated_with_vendor = (
-        payload.is_associated_with_vendor
-    )
+    if date_of_birth is not None:
+       profile.date_of_birth = date_of_birth
 
-    profile.vendor_id = payload.vendor_id
-    profile.years_of_experience_id = (
-        payload.years_of_experience_id
-    )
-    profile.primary_specialization_id = (
-        payload.primary_specialization_id
-    )
+    if gender is not None:
+       profile.gender = gender
 
+    if is_associated_with_vendor is not None:
+        profile.is_associated_with_vendor = is_associated_with_vendor
+
+    if vendor_id is not None:
+       profile.vendor_id = vendor_id
+
+    if years_of_experience_id is not None:
+        profile.years_of_experience_id = years_of_experience_id
+
+    if primary_specialization_id is not None:
+        profile.primary_specialization_id = primary_specialization_id
+
+    # profile.is_associated_with_vendor = is_associated_with_vendor
+    # profile.vendor_id = vendor_id
+    # profile.is_associated_with_vendor = is_associated_with_vendor
+
+    # if is_associated_with_vendor:
+    #     profile.vendor_id = vendor_id
+    # else:
+    #     profile.vendor_id = None
+    # profile.years_of_experience_id = years_of_experience_id
+    # profile.primary_specialization_id = primary_specialization_id
     # ----------------------------
-    # Save Documents
+    # Save Profile Image
     # ----------------------------
-    if payload.documents:
 
-        document = db.execute(
-            select(FieldEngineerDocument).where(
-                FieldEngineerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
+    if profile_image:
 
-        if not document:
-            document = FieldEngineerDocument(
-                user_profile_id=profile.id
-            )
-            db.add(document)
+       os.makedirs("uploads/field_engineer", exist_ok=True)
 
-        document.identity_proof = payload.documents.identity_proof
-        document.education_certificate = (
-            payload.documents.education_certificate
+       image_path = f"uploads/field_engineer/{profile_image.filename}"
+
+       with open(image_path, "wb") as buffer:
+           shutil.copyfileobj(profile_image.file, buffer)
+
+       profile.profile_image = image_path
+
+
+    # profile.is_associated_with_vendor = (
+    #     payload.is_associated_with_vendor
+    # )
+
+    # profile.vendor_id = payload.vendor_id
+    # profile.years_of_experience_id = (
+    #     payload.years_of_experience_id
+    # )
+    # profile.primary_specialization_id = (
+    #     payload.primary_specialization_id
+    # )
+    # ----------------------------
+    ###Save Documents###
+    #----------------------------
+    document = db.execute(
+       select(FieldEngineerDocument).where(
+           FieldEngineerDocument.user_profile_id == profile.id
         )
-        document.work_company_id = (
-            payload.documents.work_company_id
+    ).scalars().first()
+
+    if not document:
+       document = FieldEngineerDocument(
+            user_profile_id=profile.id
         )
-        document.certification = (
-            payload.documents.certification
-        )
-        document.experience_certificate = (
-            payload.documents.experience_certificate
-        )
-        document.driving_license = (
-            payload.documents.driving_license
-        )
+       db.add(document)
+
+    os.makedirs("uploads/field_engineer", exist_ok=True)
+
+    if identity_proof:
+        identity_path = f"uploads/field_engineer/{identity_proof.filename}"
+
+        with open(identity_path, "wb") as buffer:
+            shutil.copyfileobj(identity_proof.file, buffer)
+
+        document.identity_proof = identity_path
+
+    if education_certificate:
+       education_path = f"uploads/field_engineer/{education_certificate.filename}"
+
+       with open(education_path, "wb") as buffer:
+           shutil.copyfileobj(education_certificate.file, buffer)
+
+       document.education_certificate = education_path
+
+    if work_company_id:
+        company_path = f"uploads/field_engineer/{work_company_id.filename}"
+
+        with open(company_path, "wb") as buffer:
+            shutil.copyfileobj(work_company_id.file, buffer)
+
+        document.work_company_id = company_path
+
+    if certification:
+        certification_path = f"uploads/field_engineer/{certification.filename}"
+
+        with open(certification_path, "wb") as buffer:
+            shutil.copyfileobj(certification.file, buffer)
+
+        document.certification = certification_path
+
+    if experience_certificate:
+        experience_path = f"uploads/field_engineer/{experience_certificate.filename}"
+
+        with open(experience_path, "wb") as buffer:
+            shutil.copyfileobj(experience_certificate.file, buffer)
+
+        document.experience_certificate = experience_path
+
+    if driving_license:
+        license_path = f"uploads/field_engineer/{driving_license.filename}"
+
+        with open(license_path, "wb") as buffer:
+            shutil.copyfileobj(driving_license.file, buffer)
+
+        document.driving_license = license_path
+
 
     # ----------------------------
     # Save Availability
     # ----------------------------
-    if payload.availability:
+    # if payload.availability:
 
-        db.query(FieldEngineerAvailability).filter(
+    #     db.query(FieldEngineerAvailability).filter(
+    #         FieldEngineerAvailability.field_engineer_id == profile.id
+    #     ).delete()
+
+    #     for item in payload.availability:
+
+    #         availability = FieldEngineerAvailability(
+    #             field_engineer_id=profile.id,
+    #             day_of_week=item.day_of_week,
+    #             start_time=item.start_time,
+    #             end_time=item.end_time,
+    #             is_available=item.is_available
+    #         )
+
+    #         db.add(availability)
+    # ----------------------------
+    # Save Availability
+    # ----------------------------
+
+    availability = FieldEngineerAvailability(
+        field_engineer_id=profile.id,
+        day_of_week=1,
+        start_time="10:00:00",
+        end_time="19:00:00",
+        is_available=True
+    )
+
+    db.add(availability)
+    print("========== DOCUMENT VALUES ==========")
+    print("Profile ID:", profile.id)
+    print("Identity:", document.identity_proof)
+    print("Education:", document.education_certificate)
+    print("Company:", document.work_company_id)
+    print("Certification:", document.certification)
+    print("Experience:", document.experience_certificate)
+    print("License:", document.driving_license)
+    print("====================================")
+    print("========== POST DOCUMENT ==========")
+    print("Profile ID:", profile.id)
+    print("Identity:", document.identity_proof)
+    print("Education:", document.education_certificate)
+    print("Company:", document.work_company_id)
+    print("Certification:", document.certification)
+    print("Experience:", document.experience_certificate)
+    print("License:", document.driving_license)
+    print("===================================")
+
+
+
+    availability_data = db.execute(
+        select(FieldEngineerAvailability).where(
             FieldEngineerAvailability.field_engineer_id == profile.id
-        ).delete()
+        )
+    ).scalars().all()
 
-        for item in payload.availability:
+    print("========== AVAILABILITY ==========")
+    print("Profile ID:", profile.id)
 
-            availability = FieldEngineerAvailability(
-                field_engineer_id=profile.id,
-                day_of_week=item.day_of_week,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                is_available=item.is_available
-            )
+    for item in availability_data:
+        print(
+            item.day_of_week,
+            item.start_time,
+            item.end_time,
+            item.is_available
+        )
 
-            db.add(availability)
+    print("==================================")
 
     db.commit()
     db.refresh(profile)
@@ -405,15 +509,43 @@ async def complete_field_engineer_profile(
     }
 
 
-@router.get("/profile")
+@router.get("/field-engineer/me")
 async def get_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-    user, profile = get_user_and_profile(
-        current_user_email,
-        db
-    )
+    # Get logged in user
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    print("========== GET API ==========")
+    print("Current Email:", current_user_email)
+    print("User ID:", user.id)
+    print("Role:", user.role)
+
+    # Check role
+    # if user.role != UserRole.field_engineer:
+    if user.role != UserRole.FIELD_ENGINEER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Field Engineer can access this API"
+        )
+
+    # Get profile
+    profile = db.execute(
+        select(UserProfile).where(
+            UserProfile.user_id == user.id
+        )
+    ).scalars().first()
+
+    print("Profile:", profile)
 
     if not profile:
         raise HTTPException(
@@ -421,17 +553,22 @@ async def get_field_engineer_profile(
             detail="Profile not found"
         )
 
+    # Get documents
     document = db.execute(
         select(FieldEngineerDocument).where(
             FieldEngineerDocument.user_profile_id == profile.id
         )
     ).scalars().first()
+    print("Profile:", profile)
 
+    # Get availability
     availability = db.execute(
         select(FieldEngineerAvailability).where(
             FieldEngineerAvailability.field_engineer_id == profile.id
         )
     ).scalars().all()
+
+    print("Profile:", profile)
 
     return {
         "email": user.email,
@@ -472,9 +609,25 @@ async def get_field_engineer_profile(
 
 
 
-@router.put("/profile")
+# @router.put("/profile")
+@router.put("/update")
 async def update_field_engineer_profile(
-    payload: FieldEngineerProfileSchema,
+    full_name: str = Form(None),
+    date_of_birth: date = Form(None),
+    gender: str = Form(None),
+    is_associated_with_vendor: bool = Form(None),
+    vendor_id: Optional[int] = Form(None),
+    years_of_experience_id: int = Form(None),
+    primary_specialization_id: int = Form(None),
+
+    profile_image: UploadFile = File(None),
+    identity_proof: UploadFile = File(None),
+    education_certificate: UploadFile = File(None),
+    work_company_id: UploadFile = File(None),
+    certification: UploadFile = File(None),
+    experience_certificate: UploadFile = File(None),
+    driving_license: UploadFile = File(None),
+
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
@@ -492,69 +645,90 @@ async def update_field_engineer_profile(
     # ----------------------------
     # Update Profile
     # ----------------------------
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
+    profile.full_name = full_name
+    profile.date_of_birth = date_of_birth   
+    profile.gender = gender
+    profile.is_associated_with_vendor = is_associated_with_vendor
+    profile.vendor_id = vendor_id
+    profile.years_of_experience_id = years_of_experience_id
+    profile.primary_specialization_id = primary_specialization_id
 
-    profile.is_associated_with_vendor = (
-        payload.is_associated_with_vendor
-    )
-
-    profile.vendor_id = payload.vendor_id
-
-    profile.years_of_experience_id = (
-        payload.years_of_experience_id
-    )
-
-    profile.primary_specialization_id = (
-        payload.primary_specialization_id
-    )
-
+    if profile_image:
+        profile.profile_image = save_upload_file(
+           profile_image,
+           "uploads/field_engineer"
+        )
     # ----------------------------
     # Update Documents
     # ----------------------------
-    if payload.documents:
+    document = db.execute(
+        select(FieldEngineerDocument).where(
+           FieldEngineerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
 
-        document = db.execute(
-            select(FieldEngineerDocument).where(
-                FieldEngineerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
+    if not document:
+        document = FieldEngineerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(document)
 
-        if not document:
-            document = FieldEngineerDocument(
-                user_profile_id=profile.id
-            )
-            db.add(document)
+    if identity_proof:
+        document.identity_proof = save_upload_file(
+            identity_proof,
+            "uploads/field_engineer"
+        )
 
-        document.identity_proof = payload.documents.identity_proof
-        document.education_certificate = payload.documents.education_certificate
-        document.work_company_id = payload.documents.work_company_id
-        document.certification = payload.documents.certification
-        document.experience_certificate = payload.documents.experience_certificate
-        document.driving_license = payload.documents.driving_license
+    if education_certificate:
+        document.education_certificate = save_upload_file(
+           education_certificate,
+           "uploads/field_engineer"
+        )
+
+    if work_company_id:
+        document.work_company_id = save_upload_file(
+           work_company_id,
+           "uploads/field_engineer"
+        )
+
+    if certification:
+        document.certification = save_upload_file(
+            certification,
+            "uploads/field_engineer"
+        )
+
+    if experience_certificate:
+        document.experience_certificate = save_upload_file(
+             experience_certificate,
+             "uploads/field_engineer"
+        )
+
+    if driving_license:
+        document.driving_license = save_upload_file(
+            driving_license,
+            "uploads/field_engineer"
+        )
 
     # ----------------------------
     # Update Availability
     # ----------------------------
-    if payload.availability:
+    # if payload.availability:
 
-        db.query(FieldEngineerAvailability).filter(
-            FieldEngineerAvailability.field_engineer_id == profile.id
-        ).delete()
+    #     db.query(FieldEngineerAvailability).filter(
+    #         FieldEngineerAvailability.field_engineer_id == profile.id
+    #     ).delete()
 
-        for item in payload.availability:
+    #     for item in payload.availability:
 
-            availability = FieldEngineerAvailability(
-                field_engineer_id=profile.id,
-                day_of_week=item.day_of_week,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                is_available=item.is_available
-            )
+    #         availability = FieldEngineerAvailability(
+    #             field_engineer_id=profile.id,
+    #             day_of_week=item.day_of_week,
+    #             start_time=item.start_time,
+    #             end_time=item.end_time,
+    #             is_available=item.is_available
+    #         )
 
-            db.add(availability)
+    #         db.add(availability)
 
     db.commit()
     db.refresh(profile)
