@@ -6,7 +6,12 @@ from passlib.hash import pbkdf2_sha256
 
 from app.core.database import get_db
 
-from app.profile.models import User
+from app.profile.models import (
+    User,
+    UserProfile,
+    VendorProfile,
+    UserRole
+)
 from app.profile.schemas import (
     SignupSchema,
     SigninSchema,
@@ -28,15 +33,63 @@ router = APIRouter(
 )
 
 
+
+
+
+@router.post("/request-otp")
+async def request_otp(
+    payload: RequestOTPSchema
+):
+    send_otp_to_user(payload.email)
+
+    otp = otp_store[payload.email]["otp"]
+
+    await send_email(
+        recipient=payload.email,
+        subject="OTP Verification",
+        body=f"Your OTP is {otp}"
+    )
+
+    return {
+        "message": "OTP sent successfully"
+    }
+
+
+
+
+
+@router.post("/verify-otp")
+async def verify_otp(
+    payload: VerifyOTPSchema
+):
+    is_valid = verify_otp_for_user(
+        payload.email,
+        payload.otp
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+
+    return {
+        "message": "OTP verified successfully"
+    }
+
+
+
+
+
 @router.post("/signup")
 async def signup(
     payload: SignupSchema,
     db: Session = Depends(get_db)
 ):
+    # Check if email already exists
     result = db.execute(
         select(User).where(User.email == payload.email)
     )
-    
 
     existing_user = result.scalars().first()
 
@@ -46,6 +99,7 @@ async def signup(
             detail="Email already registered"
         )
 
+    # Create User
     user = User(
         email=payload.email,
         password_hash=pbkdf2_sha256.hash(payload.password),
@@ -55,9 +109,31 @@ async def signup(
 
     db.add(user)
     db.commit()
+    db.refresh(user)
+
+    # Create UserProfile for Customer & Field Engineer
+    if payload.role in [UserRole.USER, UserRole.FIELD_ENGINEER]:
+
+        user_profile = UserProfile(
+            user_id=user.id
+        )
+
+        db.add(user_profile)
+        db.commit()
+
+    # Create VendorProfile for Vendor
+    if payload.role == UserRole.VENDOR:
+
+        vendor_profile = VendorProfile(
+            user_id=user.id
+        )
+
+        db.add(vendor_profile)
+        db.commit()
 
     return {
-        "message": "User registered successfully"
+        "message": "User registered successfully",
+        "role": user.role.value
     }
 
 
@@ -148,24 +224,6 @@ async def signin(
 
 
 
-@router.post("/request-otp")
-async def request_otp(
-    payload: RequestOTPSchema
-):
-    send_otp_to_user(payload.email)
-
-    otp = otp_store[payload.email]["otp"]
-
-    await send_email(
-        recipient=payload.email,
-        subject="OTP Verification",
-        body=f"Your OTP is {otp}"
-    )
-
-    return {
-        "message": "OTP sent successfully"
-    }
-
 
 # @router.post("/verify-otp")
 # async def verify_otp(
@@ -206,21 +264,3 @@ async def request_otp(
     #     "access_token": token,
     #     "token_type": "bearer"
     # }
-@router.post("/verify-otp")
-async def verify_otp(
-    payload: VerifyOTPSchema
-):
-    is_valid = verify_otp_for_user(
-        payload.email,
-        payload.otp
-    )
-
-    if not is_valid:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid OTP"
-        )
-
-    return {
-        "message": "OTP verified successfully"
-    }
