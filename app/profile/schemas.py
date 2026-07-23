@@ -12,9 +12,9 @@ class SignupSchema(BaseModel):
     password: str
     role: UserRole
 
-    company_name: Optional[str] = None
-    owner_manager_name: Optional[str] = None
-    vendor_type: Optional[str] = None
+    # company_name: Optional[str] = None
+    # owner_manager_name: Optional[str] = None
+    # vendor_type: Optional[str] = None
 
 
 class SigninSchema(BaseModel):
@@ -50,18 +50,7 @@ class UserProfileSchema(BaseModel):
     profile_image: Optional[str] = None
 
 
-class AddressCreateSchema(BaseModel):
-    address_type: str
-    name: str
-    flat_no: str
-    street: str
-    city: str
-    state: str
-    country: str
-    postal_code: str
-    latitude: Optional[str] = None
-    longitude: Optional[str] = None
-    is_default: bool = False
+
 
 
 
@@ -82,18 +71,7 @@ class AddressCreateSchema(BaseModel):
 #     is_default: bool = False
 
 
-class AddressUpdateSchema(BaseModel):
-    address_type: Optional[str] = None
-    name: Optional[str] = None
-    flat_no: Optional[str] = None
-    street: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    postal_code: Optional[str] = None
-    latitude: Optional[str] = None
-    longitude: Optional[str] = None
-    is_default: Optional[bool] = None
+
 
 class FieldEngineerProfileSchema(BaseModel):
     full_name: str
@@ -138,18 +116,23 @@ class FieldEngineerServiceAreaSchema(BaseModel):
 
 
 
-class FEAddressCreateSchema(BaseModel):
+class AddressCreateSchema(BaseModel):
     address_type: str
 
-    country: str
-    state: str
-    postal_code: str
+    # Customer Fields
+    name: Optional[str] = None
+    flat_no: Optional[str] = None
+    street: Optional[str] = None
 
-    area_locality: str
-    city: str
-
-    address_line1: str
+    # Field Engineer Fields
+    address_line1: Optional[str] = None
     address_line2: Optional[str] = None
+    area_locality: Optional[str] = None
+
+    city: str
+    state: str
+    country: str
+    postal_code: str
 
     latitude: Optional[str] = None
     longitude: Optional[str] = None
@@ -157,18 +140,24 @@ class FEAddressCreateSchema(BaseModel):
     is_default: bool = False
 
 
-class FEAddressUpdateSchema(BaseModel):
+
+class AddressUpdateSchema(BaseModel):
     address_type: Optional[str] = None
 
-    country: Optional[str] = None
-    state: Optional[str] = None
-    postal_code: Optional[str] = None
+    # Customer Fields
+    name: Optional[str] = None
+    flat_no: Optional[str] = None
+    street: Optional[str] = None
 
-    area_locality: Optional[str] = None
-    city: Optional[str] = None
-
+    # Field Engineer Fields
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
+    area_locality: Optional[str] = None
+
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
 
     latitude: Optional[str] = None
     longitude: Optional[str] = None

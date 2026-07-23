@@ -742,48 +742,48 @@ async def update_field_engineer_profile(
 
 
 
-@router.post("/vendor/signin")
-async def vendor_signin(
-    payload: SigninSchema,
-    db: Session = Depends(get_db)
-):
-    result = db.execute(
-        select(User).where(User.email == payload.email)
-    )
+# @router.post("/vendor/signin")
+# async def vendor_signin(
+#     payload: SigninSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     result = db.execute(
+#         select(User).where(User.email == payload.email)
+#     )
 
-    user = result.scalars().first()
+#     user = result.scalars().first()
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+#     if not user:
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
 
-    if user.role != UserRole.VENDOR:
-        raise HTTPException(
-            status_code=403,
-            detail="Only Vendor can login"
-        )
+#     if user.role != UserRole.VENDOR:
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Only Vendor can login"
+#         )
 
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+#     if not pbkdf2_sha256.verify(
+#         payload.password,
+#         user.password_hash
+#     ):
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
 
-    access_token = create_access_token(
-        {"sub": user.email}
-    )
+#     access_token = create_access_token(
+#         {"sub": user.email}
+#     )
 
-    return {
-        "message": "Vendor signed in successfully",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": user.role.value
-    }
+#     return {
+#         "message": "Vendor signed in successfully",
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "role": user.role.value
+#     }
 
 
 @router.post("/vendor/complete-profile")
@@ -1611,6 +1611,12 @@ async def complete_customer_profile(
     bank_path = save_file(bank_account_proof)
     if bank_path:
         documents.bank_account_proof = bank_path
+
+
+    print("========== CUSTOMER PROFILE ==========")
+    print("User ID:", user.id)
+    print("Profile ID:", profile.id)
+    print("======================================")
 
     db.commit()
     db.refresh(profile)
