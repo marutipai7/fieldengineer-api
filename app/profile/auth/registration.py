@@ -8,6 +8,7 @@ from app.core.database import get_db
 
 from app.profile.models import (
     User,
+    UserProfile,
     VendorProfile,
     UserRole
 )
@@ -30,6 +31,54 @@ router = APIRouter(
     prefix="/auth",
     tags=["Registration"]
 )
+
+
+
+
+
+@router.post("/request-otp")
+async def request_otp(
+    payload: RequestOTPSchema
+):
+    send_otp_to_user(payload.email)
+
+    otp = otp_store[payload.email]["otp"]
+
+    await send_email(
+        recipient=payload.email,
+        subject="OTP Verification",
+        body=f"Your OTP is {otp}"
+    )
+
+    return {
+        "message": "OTP sent successfully"
+    }
+
+
+
+
+
+@router.post("/verify-otp")
+async def verify_otp(
+    payload: VerifyOTPSchema
+):
+    is_valid = verify_otp_for_user(
+        payload.email,
+        payload.otp
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+
+    return {
+        "message": "OTP verified successfully"
+    }
+
+
+
 
 
 @router.post("/signup")
@@ -62,7 +111,17 @@ async def signup(
     db.commit()
     db.refresh(user)
 
-    # Create Vendor Profile only for Vendor
+    # Create UserProfile for Customer & Field Engineer
+    if payload.role in [UserRole.USER, UserRole.FIELD_ENGINEER]:
+
+        user_profile = UserProfile(
+            user_id=user.id
+        )
+
+        db.add(user_profile)
+        db.commit()
+
+    # Create VendorProfile for Vendor
     if payload.role == UserRole.VENDOR:
 
         vendor_profile = VendorProfile(
@@ -165,24 +224,6 @@ async def signin(
 
 
 
-@router.post("/request-otp")
-async def request_otp(
-    payload: RequestOTPSchema
-):
-    send_otp_to_user(payload.email)
-
-    otp = otp_store[payload.email]["otp"]
-
-    await send_email(
-        recipient=payload.email,
-        subject="OTP Verification",
-        body=f"Your OTP is {otp}"
-    )
-
-    return {
-        "message": "OTP sent successfully"
-    }
-
 
 # @router.post("/verify-otp")
 # async def verify_otp(
@@ -223,21 +264,3 @@ async def request_otp(
     #     "access_token": token,
     #     "token_type": "bearer"
     # }
-@router.post("/verify-otp")
-async def verify_otp(
-    payload: VerifyOTPSchema
-):
-    is_valid = verify_otp_for_user(
-        payload.email,
-        payload.otp
-    )
-
-    if not is_valid:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid OTP"
-        )
-
-    return {
-        "message": "OTP verified successfully"
-    }
