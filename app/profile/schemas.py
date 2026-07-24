@@ -3,32 +3,42 @@ from app.profile.models import UserRole
 from datetime import date
 from typing import Optional
 from datetime import time
+from enum import Enum
 
 
 
-class SignupSchema(BaseModel):
-    email: EmailStr
-    phone_number: str
-    password: str
-    role: UserRole
+
+class OTPAction(str, Enum):
+    signup = "signup"
+    signin = "signin"
+
+
+
+# class SignupSchema(BaseModel):
+#     email: EmailStr
+#     phone_number: str
+#     password: str
+#     role: UserRole
 
     # company_name: Optional[str] = None
     # owner_manager_name: Optional[str] = None
     # vendor_type: Optional[str] = None
 
 
-class SigninSchema(BaseModel):
-    email: EmailStr
-    password: str
+# class SigninSchema(BaseModel):
+#     email: EmailStr
+#     password: str
 
 
 class RequestOTPSchema(BaseModel):
     email: EmailStr
-
+    role: UserRole
+    action: OTPAction
 
 class VerifyOTPSchema(BaseModel):
     email: EmailStr
     otp: str
+    action: OTPAction
 
 
 class TokenResponseSchema(BaseModel):
