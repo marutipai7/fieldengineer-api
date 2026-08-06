@@ -13,6 +13,7 @@ from datetime import date
 from typing import Optional
 
 
+
 from app.profile.schemas import VendorProfileSchema
 
 from app.profile.models import (
@@ -36,7 +37,7 @@ from app.utils.auth_utils import (
 )
 
 from app.profile.schemas import (
-    # SigninSchema,
+    SigninSchema,
     FieldEngineerProfileSchema
 )
 
@@ -215,11 +216,8 @@ async def get_addresses(
         for address in addresses
     ]
 
-
-
 @router.post("/complete-profile")
 async def complete_field_engineer_profile(
-    request: Request,
 
     full_name: str = Form(...),
     date_of_birth: date = Form(None),
@@ -249,25 +247,55 @@ async def complete_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-    print("========== FE COMPLETE PROFILE API CALLED ==========")
-    form = await request.form()
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
 
-    print("===== FORM DATA =====")
+    user = result.scalars().first()
 
-    for key, value in form.items():
-      print(key, "=", value)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
 
-    print("=====================")
-    
+    if user.role.value != "field_engineer":
+        raise HTTPException(
+            status_code=403,
+            detail="Only Field Engineer can login"
+        )
 
+    if not pbkdf2_sha256.verify(
+        payload.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    access_token = create_access_token(
+        {"sub": user.email}
+    )
+
+    return {
+        "message": "Field Engineer signed in successfully",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role.value
+    }
+
+@router.post("/complete-profile")
+async def complete_field_engineer_profile(
+    payload: FieldEngineerProfileSchema,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
     user = db.execute(
         select(User).where(
             User.email == current_user_email
         )
     ).scalars().first()
-    print("========== POST USER ==========")
-    print("Current Email:", current_user_email)
-    print("User ID:", user.id)
 
     if not user:
         raise HTTPException(
@@ -293,212 +321,81 @@ async def complete_field_engineer_profile(
         )
         db.add(profile)
         db.flush()
-        print("Profile ID:", profile.id)
-        print("==============================")
 
     # ----------------------------
     # Save Profile
     # ----------------------------
-    # profile.full_name = payload.full_name
-    # profile.date_of_birth = payload.date_of_birth
-    # profile.gender = payload.gender
-    # profile.profile_image = payload.profile_image
-    if full_name is not None:
-        profile.full_name = full_name
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
 
-    if date_of_birth is not None:
-       profile.date_of_birth = date_of_birth
-
-    if gender is not None:
-       profile.gender = gender
-
-    if is_associated_with_vendor is not None:
-        profile.is_associated_with_vendor = is_associated_with_vendor
-
-    if vendor_id is not None:
-       profile.vendor_id = vendor_id
-
-    if years_of_experience_id is not None:
-        profile.years_of_experience_id = years_of_experience_id
-
-    if primary_specialization_id is not None:
-        profile.primary_specialization_id = primary_specialization_id
-
-    # profile.is_associated_with_vendor = is_associated_with_vendor
-    # profile.vendor_id = vendor_id
-    # profile.is_associated_with_vendor = is_associated_with_vendor
-
-    # if is_associated_with_vendor:
-    #     profile.vendor_id = vendor_id
-    # else:
-    #     profile.vendor_id = None
-    # profile.years_of_experience_id = years_of_experience_id
-    # profile.primary_specialization_id = primary_specialization_id
-    # ----------------------------
-    # Save Profile Image
-    # ----------------------------
-
-    if profile_image:
-
-       os.makedirs("uploads/field_engineer", exist_ok=True)
-
-       image_path = f"uploads/field_engineer/{profile_image.filename}"
-
-       with open(image_path, "wb") as buffer:
-           shutil.copyfileobj(profile_image.file, buffer)
-
-       profile.profile_image = image_path
-
-
-    # profile.is_associated_with_vendor = (
-    #     payload.is_associated_with_vendor
-    # )
-
-    # profile.vendor_id = payload.vendor_id
-    # profile.years_of_experience_id = (
-    #     payload.years_of_experience_id
-    # )
-    # profile.primary_specialization_id = (
-    #     payload.primary_specialization_id
-    # )
-    # ----------------------------
-    ###Save Documents###
-    #----------------------------
-    document = db.execute(
-       select(FieldEngineerDocument).where(
-           FieldEngineerDocument.user_profile_id == profile.id
-        )
-    ).scalars().first()
-
-    if not document:
-       document = FieldEngineerDocument(
-            user_profile_id=profile.id
-        )
-       db.add(document)
-
-    os.makedirs("uploads/field_engineer", exist_ok=True)
-
-    if identity_proof:
-        identity_path = f"uploads/field_engineer/{identity_proof.filename}"
-
-        with open(identity_path, "wb") as buffer:
-            shutil.copyfileobj(identity_proof.file, buffer)
-
-        document.identity_proof = identity_path
-
-    if education_certificate:
-       education_path = f"uploads/field_engineer/{education_certificate.filename}"
-
-       with open(education_path, "wb") as buffer:
-           shutil.copyfileobj(education_certificate.file, buffer)
-
-       document.education_certificate = education_path
-
-    if work_company_id:
-        company_path = f"uploads/field_engineer/{work_company_id.filename}"
-
-        with open(company_path, "wb") as buffer:
-            shutil.copyfileobj(work_company_id.file, buffer)
-
-        document.work_company_id = company_path
-
-    if certification:
-        certification_path = f"uploads/field_engineer/{certification.filename}"
-
-        with open(certification_path, "wb") as buffer:
-            shutil.copyfileobj(certification.file, buffer)
-
-        document.certification = certification_path
-
-    if experience_certificate:
-        experience_path = f"uploads/field_engineer/{experience_certificate.filename}"
-
-        with open(experience_path, "wb") as buffer:
-            shutil.copyfileobj(experience_certificate.file, buffer)
-
-        document.experience_certificate = experience_path
-
-    if driving_license:
-        license_path = f"uploads/field_engineer/{driving_license.filename}"
-
-        with open(license_path, "wb") as buffer:
-            shutil.copyfileobj(driving_license.file, buffer)
-
-        document.driving_license = license_path
-
-
-    # ----------------------------
-    # Save Availability
-    # ----------------------------
-    # if payload.availability:
-
-    #     db.query(FieldEngineerAvailability).filter(
-    #         FieldEngineerAvailability.field_engineer_id == profile.id
-    #     ).delete()
-
-    #     for item in payload.availability:
-
-    #         availability = FieldEngineerAvailability(
-    #             field_engineer_id=profile.id,
-    #             day_of_week=item.day_of_week,
-    #             start_time=item.start_time,
-    #             end_time=item.end_time,
-    #             is_available=item.is_available
-    #         )
-
-    #         db.add(availability)
-    # ----------------------------
-    # Save Availability
-    # ----------------------------
-
-    availability = FieldEngineerAvailability(
-        field_engineer_id=profile.id,
-        day_of_week=1,
-        start_time="10:00:00",
-        end_time="19:00:00",
-        is_available=True
+    profile.is_associated_with_vendor = (
+        payload.is_associated_with_vendor
     )
 
-    db.add(availability)
-    print("========== DOCUMENT VALUES ==========")
-    print("Profile ID:", profile.id)
-    print("Identity:", document.identity_proof)
-    print("Education:", document.education_certificate)
-    print("Company:", document.work_company_id)
-    print("Certification:", document.certification)
-    print("Experience:", document.experience_certificate)
-    print("License:", document.driving_license)
-    print("====================================")
-    print("========== POST DOCUMENT ==========")
-    print("Profile ID:", profile.id)
-    print("Identity:", document.identity_proof)
-    print("Education:", document.education_certificate)
-    print("Company:", document.work_company_id)
-    print("Certification:", document.certification)
-    print("Experience:", document.experience_certificate)
-    print("License:", document.driving_license)
-    print("===================================")
+    profile.vendor_id = payload.vendor_id
+    profile.years_of_experience_id = (
+        payload.years_of_experience_id
+    )
+    profile.primary_specialization_id = (
+        payload.primary_specialization_id
+    )
 
+    # ----------------------------
+    # Save Documents
+    # ----------------------------
+    if payload.documents:
 
+        document = db.execute(
+            select(FieldEngineerDocument).where(
+                FieldEngineerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
-    availability_data = db.execute(
-        select(FieldEngineerAvailability).where(
+        if not document:
+            document = FieldEngineerDocument(
+                user_profile_id=profile.id
+            )
+            db.add(document)
+
+        document.identity_proof = payload.documents.identity_proof
+        document.education_certificate = (
+            payload.documents.education_certificate
+        )
+        document.work_company_id = (
+            payload.documents.work_company_id
+        )
+        document.certification = (
+            payload.documents.certification
+        )
+        document.experience_certificate = (
+            payload.documents.experience_certificate
+        )
+        document.driving_license = (
+            payload.documents.driving_license
+        )
+
+    # ----------------------------
+    # Save Availability
+    # ----------------------------
+    if payload.availability:
+
+        db.query(FieldEngineerAvailability).filter(
             FieldEngineerAvailability.field_engineer_id == profile.id
-        )
-    ).scalars().all()
+        ).delete()
 
-    print("========== AVAILABILITY ==========")
-    print("Profile ID:", profile.id)
+        for item in payload.availability:
 
-    for item in availability_data:
-        print(
-            item.day_of_week,
-            item.start_time,
-            item.end_time,
-            item.is_available
-        )
+            availability = FieldEngineerAvailability(
+                field_engineer_id=profile.id,
+                day_of_week=item.day_of_week,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                is_available=item.is_available
+            )
 
-    print("==================================")
+            db.add(availability)
 
     db.commit()
     db.refresh(profile)
@@ -509,43 +406,15 @@ async def complete_field_engineer_profile(
     }
 
 
-@router.get("/field-engineer/me")
+@router.get("/profile")
 async def get_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-    # Get logged in user
-    user = db.execute(
-        select(User).where(User.email == current_user_email)
-    ).scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-    
-    print("========== GET API ==========")
-    print("Current Email:", current_user_email)
-    print("User ID:", user.id)
-    print("Role:", user.role)
-
-    # Check role
-    # if user.role != UserRole.field_engineer:
-    if user.role != UserRole.FIELD_ENGINEER:
-        raise HTTPException(
-            status_code=403,
-            detail="Only Field Engineer can access this API"
-        )
-
-    # Get profile
-    profile = db.execute(
-        select(UserProfile).where(
-            UserProfile.user_id == user.id
-        )
-    ).scalars().first()
-
-    print("Profile:", profile)
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
     if not profile:
         raise HTTPException(
@@ -553,22 +422,17 @@ async def get_field_engineer_profile(
             detail="Profile not found"
         )
 
-    # Get documents
     document = db.execute(
         select(FieldEngineerDocument).where(
             FieldEngineerDocument.user_profile_id == profile.id
         )
     ).scalars().first()
-    print("Profile:", profile)
 
-    # Get availability
     availability = db.execute(
         select(FieldEngineerAvailability).where(
             FieldEngineerAvailability.field_engineer_id == profile.id
         )
     ).scalars().all()
-
-    print("Profile:", profile)
 
     return {
         "email": user.email,
@@ -609,25 +473,9 @@ async def get_field_engineer_profile(
 
 
 
-# @router.put("/profile")
-@router.put("/update")
+@router.put("/profile")
 async def update_field_engineer_profile(
-    full_name: str = Form(None),
-    date_of_birth: date = Form(None),
-    gender: str = Form(None),
-    is_associated_with_vendor: bool = Form(None),
-    vendor_id: Optional[int] = Form(None),
-    years_of_experience_id: int = Form(None),
-    primary_specialization_id: int = Form(None),
-
-    profile_image: UploadFile = File(None),
-    identity_proof: UploadFile = File(None),
-    education_certificate: UploadFile = File(None),
-    work_company_id: UploadFile = File(None),
-    certification: UploadFile = File(None),
-    experience_certificate: UploadFile = File(None),
-    driving_license: UploadFile = File(None),
-
+    payload: FieldEngineerProfileSchema,
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
@@ -645,90 +493,69 @@ async def update_field_engineer_profile(
     # ----------------------------
     # Update Profile
     # ----------------------------
-    profile.full_name = full_name
-    profile.date_of_birth = date_of_birth   
-    profile.gender = gender
-    profile.is_associated_with_vendor = is_associated_with_vendor
-    profile.vendor_id = vendor_id
-    profile.years_of_experience_id = years_of_experience_id
-    profile.primary_specialization_id = primary_specialization_id
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
 
-    if profile_image:
-        profile.profile_image = save_upload_file(
-           profile_image,
-           "uploads/field_engineer"
-        )
+    profile.is_associated_with_vendor = (
+        payload.is_associated_with_vendor
+    )
+
+    profile.vendor_id = payload.vendor_id
+
+    profile.years_of_experience_id = (
+        payload.years_of_experience_id
+    )
+
+    profile.primary_specialization_id = (
+        payload.primary_specialization_id
+    )
+
     # ----------------------------
     # Update Documents
     # ----------------------------
-    document = db.execute(
-        select(FieldEngineerDocument).where(
-           FieldEngineerDocument.user_profile_id == profile.id
-        )
-    ).scalars().first()
+    if payload.documents:
 
-    if not document:
-        document = FieldEngineerDocument(
-            user_profile_id=profile.id
-        )
-        db.add(document)
+        document = db.execute(
+            select(FieldEngineerDocument).where(
+                FieldEngineerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
-    if identity_proof:
-        document.identity_proof = save_upload_file(
-            identity_proof,
-            "uploads/field_engineer"
-        )
+        if not document:
+            document = FieldEngineerDocument(
+                user_profile_id=profile.id
+            )
+            db.add(document)
 
-    if education_certificate:
-        document.education_certificate = save_upload_file(
-           education_certificate,
-           "uploads/field_engineer"
-        )
-
-    if work_company_id:
-        document.work_company_id = save_upload_file(
-           work_company_id,
-           "uploads/field_engineer"
-        )
-
-    if certification:
-        document.certification = save_upload_file(
-            certification,
-            "uploads/field_engineer"
-        )
-
-    if experience_certificate:
-        document.experience_certificate = save_upload_file(
-             experience_certificate,
-             "uploads/field_engineer"
-        )
-
-    if driving_license:
-        document.driving_license = save_upload_file(
-            driving_license,
-            "uploads/field_engineer"
-        )
+        document.identity_proof = payload.documents.identity_proof
+        document.education_certificate = payload.documents.education_certificate
+        document.work_company_id = payload.documents.work_company_id
+        document.certification = payload.documents.certification
+        document.experience_certificate = payload.documents.experience_certificate
+        document.driving_license = payload.documents.driving_license
 
     # ----------------------------
     # Update Availability
     # ----------------------------
-    # if payload.availability:
+    if payload.availability:
 
-    #     db.query(FieldEngineerAvailability).filter(
-    #         FieldEngineerAvailability.field_engineer_id == profile.id
-    #     ).delete()
+        db.query(FieldEngineerAvailability).filter(
+            FieldEngineerAvailability.field_engineer_id == profile.id
+        ).delete()
 
-    #     for item in payload.availability:
+        for item in payload.availability:
 
-    #         availability = FieldEngineerAvailability(
-    #             field_engineer_id=profile.id,
-    #             day_of_week=item.day_of_week,
-    #             start_time=item.start_time,
-    #             end_time=item.end_time,
-    #             is_available=item.is_available
-    #         )
+            availability = FieldEngineerAvailability(
+                field_engineer_id=profile.id,
+                day_of_week=item.day_of_week,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                is_available=item.is_available
+            )
 
-    #         db.add(availability)
+            db.add(availability)
 
     db.commit()
     db.refresh(profile)
@@ -742,48 +569,48 @@ async def update_field_engineer_profile(
 
 
 
-# @router.post("/vendor/signin")
-# async def vendor_signin(
-#     payload: SigninSchema,
-#     db: Session = Depends(get_db)
-# ):
-#     result = db.execute(
-#         select(User).where(User.email == payload.email)
-#     )
+@router.post("/vendor/signin")
+async def vendor_signin(
+    payload: SigninSchema,
+    db: Session = Depends(get_db)
+):
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
 
-#     user = result.scalars().first()
+    user = result.scalars().first()
 
-#     if not user:
-#         raise HTTPException(
-#             status_code=401,
-#             detail="Invalid credentials"
-#         )
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
 
-#     if user.role != UserRole.VENDOR:
-#         raise HTTPException(
-#             status_code=403,
-#             detail="Only Vendor can login"
-#         )
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can login"
+        )
 
-#     if not pbkdf2_sha256.verify(
-#         payload.password,
-#         user.password_hash
-#     ):
-#         raise HTTPException(
-#             status_code=401,
-#             detail="Invalid credentials"
-#         )
+    if not pbkdf2_sha256.verify(
+        payload.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
 
-#     access_token = create_access_token(
-#         {"sub": user.email}
-#     )
+    access_token = create_access_token(
+        {"sub": user.email}
+    )
 
-#     return {
-#         "message": "Vendor signed in successfully",
-#         "access_token": access_token,
-#         "token_type": "bearer",
-#         "role": user.role.value
-#     }
+    return {
+        "message": "Vendor signed in successfully",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": user.role.value
+    }
 
 
 @router.post("/vendor/complete-profile")
@@ -1429,39 +1256,52 @@ async def update_vendor_profile(
 
 # Complete Customer Profile
 
-@router.post("/customer/complete-profile")
+@router.post("/customer/complete-profile/{step}")
 async def complete_customer_profile(
+    step: int,
+    # ----------------------------
+    # STEP 1 - PERSONAL
+    # ----------------------------
 
-    # Personal Details
-    full_name: str = Form(...),
-    date_of_birth: date = Form(...),
-    gender: str = Form(...),
+    full_name: Optional[str] = Form(None),
+    date_of_birth: Optional[date] = Form(None),
+    gender: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
     profile_image: UploadFile = File(None),
-    email: str = Form(...),
-    phone_number: str = Form(...),
 
-    # Identity
-    identity_type: str = Form(...),
-    identity_number: str = Form(...),
+    # ----------------------------
+    # STEP 2 - IDENTITY
+    # ----------------------------
+
+    identity_type: Optional[str] = Form(None),
+    identity_number: Optional[str] = Form(None),
     front_image: UploadFile = File(None),
     back_image: UploadFile = File(None),
 
-    # Business
-    company_name: str = Form(...),
-    business_type: str = Form(...),
-    industry: str = Form(...),
+    # ----------------------------
+    # STEP 3 - BUSINESS
+    # ----------------------------
+
+    company_name: Optional[str] = Form(None),
+    business_type: Optional[str] = Form(None),
+    industry: Optional[str] = Form(None),
     website: Optional[str] = Form(None),
-    office_address: str = Form(...),
-    city: str = Form(...),
-    state: str = Form(...),
-    pincode: str = Form(...),
+    office_address: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    state: Optional[str] = Form(None),
+    pincode: Optional[str] = Form(None),
     gst_number: Optional[str] = Form(None),
     tax_number: Optional[str] = Form(None),
-    authorized_person_name: str = Form(...),
-    designation: str = Form(...),
-    work_email: str = Form(...),
+    authorized_person_name: Optional[str] = Form(None),
+    designation: Optional[str] = Form(None),
+    work_email: Optional[str] = Form(None),
+    work_phone: Optional[str] = Form(None),
 
-    # Documents
+    # ----------------------------
+    # STEP 4 - DOCUMENTS
+    # ----------------------------
+
     gst_certificate: UploadFile = File(None),
     tax_identification_card: UploadFile = File(None),
     company_registration_certificate: UploadFile = File(None),
@@ -1493,141 +1333,262 @@ async def complete_customer_profile(
     os.makedirs("uploads", exist_ok=True)
 
     def save_file(file: UploadFile):
+
         if not file:
             return None
 
         filename = f"{uuid.uuid4()}_{file.filename}"
-        path = os.path.join("uploads", filename)
+
+        path = os.path.join(
+            "uploads",
+            filename
+        )
 
         with open(path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            shutil.copyfileobj(
+                file.file,
+                buffer
+            )
 
         return path
 
-    # ---------------------------------------
-    # User Profile
-    # ---------------------------------------
+    if step == 1:
+        if not full_name:
+            raise HTTPException(400, "Full name is required.")
 
-    profile.full_name = full_name
-    profile.date_of_birth = date_of_birth
-    profile.gender = gender
+        if not date_of_birth:
+            raise HTTPException(400, "Date of birth is required.")
 
-    profile_image_path = save_file(profile_image)
+        if not gender:
+            raise HTTPException(400, "Gender is required.")
 
-    if profile_image_path:
-        profile.profile_image = profile_image_path
+        if not phone_number:
+            raise HTTPException(400, "Phone number is required.")
 
-    user.email = email
-    user.phone_number = phone_number
+        # Never allow changing the registered email
 
-    # ---------------------------------------
-    # Customer Identity
-    # ---------------------------------------
+        if email and email != user.email:
+            raise HTTPException(
+                status_code=400,
+                detail="Registered email cannot be changed."
+            )
 
-    identity = db.execute(
-        select(CustomerIdentity).where(
-            CustomerIdentity.user_profile_id == profile.id
-        )
-    ).scalars().first()
+        profile_image_path = save_file(profile_image)
 
-    if not identity:
-        identity = CustomerIdentity(
-            user_profile_id=profile.id
-        )
-        db.add(identity)
+        if profile_image_path:
+            profile.profile_image = profile_image_path
 
-    identity.identity_type = identity_type
-    identity.identity_number = identity_number
+        db.commit()
 
-    front_path = save_file(front_image)
-    if front_path:
-        identity.front_image = front_path
+        return {
+            "success": True,
+            "step": 1,
+            "message": "Step 1 completed successfully."
+        }
 
-    back_path = save_file(back_image)
-    if back_path:
-        identity.back_image = back_path
+    if step == 2:
 
-    # ---------------------------------------
-    # Customer Business
-    # ---------------------------------------
+        identity = db.execute(
+            select(CustomerIdentity).where(
+                CustomerIdentity.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
-    business = db.execute(
-        select(CustomerBusiness).where(
-            CustomerBusiness.user_profile_id == profile.id
-        )
-    ).scalars().first()
+        if not identity:
+            identity = CustomerIdentity(
+                user_profile_id=profile.id
+            )
+            db.add(identity)
 
-    if not business:
-        business = CustomerBusiness(
-            user_profile_id=profile.id
-        )
-        db.add(business)
+        if identity_type is not None:
+            identity.identity_type = identity_type
 
-    business.company_name = company_name
-    business.business_type = business_type
-    business.industry = industry
-    business.website = website
-    business.office_address = office_address
-    business.city = city
-    business.state = state
-    business.pincode = pincode
-    business.gst_number = gst_number
-    business.tax_number = tax_number
-    business.authorized_person_name = authorized_person_name
-    business.designation = designation
-    business.work_email = work_email
-    # ---------------------------------------
-    # Customer Documents
-    # ---------------------------------------
+        if identity_number is not None:
+            identity.identity_number = identity_number
 
-    documents = db.execute(
-        select(CustomerDocument).where(
-            CustomerDocument.user_profile_id == profile.id
-        )
-    ).scalars().first()
+        front_path = save_file(front_image)
 
-    if not documents:
-        documents = CustomerDocument(
-            user_profile_id=profile.id
-        )
-        db.add(documents)
+        if front_path:
+            identity.front_image = front_path
 
-    gst_path = save_file(gst_certificate)
-    if gst_path:
-        documents.gst_certificate = gst_path
+        back_path = save_file(back_image)
 
-    tax_path = save_file(tax_identification_card)
-    if tax_path:
-        documents.tax_identification_card = tax_path
+        if back_path:
+            identity.back_image = back_path
 
-    company_path = save_file(company_registration_certificate)
-    if company_path:
-        documents.company_registration_certificate = company_path
+        db.commit()
 
-    moa_path = save_file(moa_aoa)
-    if moa_path:
-        documents.moa_aoa = moa_path
+        return {
+            "success": True,
+            "step": 2,
+            "message": "Step 2 completed successfully."
+        }
 
-    bank_path = save_file(bank_account_proof)
-    if bank_path:
-        documents.bank_account_proof = bank_path
+    if step == 3:
 
+        business = db.execute(
+            select(CustomerBusiness).where(
+                CustomerBusiness.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
-    print("========== CUSTOMER PROFILE ==========")
-    print("User ID:", user.id)
-    print("Profile ID:", profile.id)
-    print("======================================")
+        if not business:
+            business = CustomerBusiness(
+                user_profile_id=profile.id
+            )
+            db.add(business)
 
-    db.commit()
-    db.refresh(profile)
+        if company_name is not None:
+            business.company_name = company_name
 
-    return {
-        "message": "Customer profile completed successfully",
-        "profile_id": profile.id,
-        "email": user.email,
-        "phone_number": user.phone_number
-    }
+        if business_type is not None:
+            business.business_type = business_type
 
+        if industry is not None:
+            business.industry = industry
+
+        if website is not None:
+            business.website = website
+
+        if office_address is not None:
+            business.office_address = office_address
+
+        if city is not None:
+            business.city = city
+
+        if state is not None:
+            business.state = state
+
+        if pincode is not None:
+            business.pincode = pincode
+
+        if gst_number is not None:
+            business.gst_number = gst_number
+
+        if tax_number is not None:
+            business.tax_number = tax_number
+
+        if authorized_person_name is not None:
+            business.authorized_person_name = authorized_person_name
+
+        if designation is not None:
+            business.designation = designation
+
+        if work_email is not None:
+            business.work_email = work_email
+
+        if work_phone is not None:
+            business.work_phone = work_phone
+
+        db.commit()
+
+        return {
+            "success": True,
+            "step": 3,
+            "message": "Step 3 completed successfully."
+        }
+
+    if step == 4:
+
+        documents = db.execute(
+            select(CustomerDocument).where(
+                CustomerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not documents:
+            documents = CustomerDocument(
+                user_profile_id=profile.id
+            )
+            db.add(documents)
+
+        gst_path = save_file(gst_certificate)
+        if gst_path:
+            documents.gst_certificate = gst_path
+
+        tax_path = save_file(tax_identification_card)
+        if tax_path:
+            documents.tax_identification_card = tax_path
+
+        company_path = save_file(company_registration_certificate)
+        if company_path:
+            documents.company_registration_certificate = company_path
+
+        moa_path = save_file(moa_aoa)
+        if moa_path:
+            documents.moa_aoa = moa_path
+
+        bank_path = save_file(bank_account_proof)
+        if bank_path:
+            documents.bank_account_proof = bank_path
+
+        db.commit()
+
+        return {
+            "success": True,
+            "step": 4,
+            "message": "Step 4 completed successfully."
+        }
+
+    if step == 5:
+
+        identity = db.execute(
+            select(CustomerIdentity).where(
+                CustomerIdentity.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        business = db.execute(
+            select(CustomerBusiness).where(
+                CustomerBusiness.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        documents = db.execute(
+            select(CustomerDocument).where(
+                CustomerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        # Optional validations
+
+        if not profile.full_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Step 1 is incomplete."
+            )
+
+        if not identity:
+            raise HTTPException(
+                status_code=400,
+                detail="Step 2 is incomplete."
+            )
+
+        if not business:
+            raise HTTPException(
+                status_code=400,
+                detail="Step 3 is incomplete."
+            )
+
+        if not documents:
+            raise HTTPException(
+                status_code=400,
+                detail="Step 4 is incomplete."
+            )
+
+        db.commit()
+
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 5,
+            "message": "Customer profile completed successfully.",
+            "profile_id": profile.id,
+            "email": user.email,
+            "phone_number": user.phone_number
+        }
+    
 # Get Customer Profile
 
 @router.get("/customer/profile")
