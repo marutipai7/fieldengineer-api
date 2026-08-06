@@ -1,25 +1,30 @@
 import profile
 import uuid
-
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request, Path
 from sqlalchemy import select
 from passlib.hash import pbkdf2_sha256
 from fastapi import Form, File, UploadFile
 import shutil
 import os
 from fastapi import Request
-from datetime import date
 from typing import Optional
+from datetime import date, time
 
 
 
 from app.profile.schemas import VendorProfileSchema
 
+
+
 from app.profile.models import (
     User,
     UserRole,
     UserProfile,
+    UserAddress,
+    FieldEngineerDocument,
+    FieldEngineerAvailability,
+    FieldEngineerServiceArea,
     CustomerIdentity,
     CustomerBusiness,
     CustomerDocument,
@@ -37,7 +42,7 @@ from app.utils.auth_utils import (
 )
 
 from app.profile.schemas import (
-    SigninSchema,
+    # SigninSchema,
     FieldEngineerProfileSchema
 )
 
@@ -216,8 +221,81 @@ async def get_addresses(
         for address in addresses
     ]
 
-@router.post("/complete-profile")
+# @router.post("/complete-profile")
+# async def complete_field_engineer_profile(
+
+#     full_name: str = Form(...),
+#     date_of_birth: date = Form(None),
+#     gender: str = Form(None),
+
+#     is_associated_with_vendor: bool = Form(False),
+
+#     vendor_id: int = Form(None),
+#     years_of_experience_id: int = Form(None),
+#     primary_specialization_id: int = Form(None),
+
+#     primary_city: str = Form(None),
+#     service_radius: int = Form(None),
+#     preferred_work_areas: str = Form(None),
+#     latitude: str = Form(None),
+#     longitude: str = Form(None),
+
+#     profile_image: UploadFile = File(None),
+
+#     identity_proof: UploadFile = File(None),
+#     education_certificate: UploadFile = File(None),
+#     work_company_id: UploadFile = File(None),
+#     certification: UploadFile = File(None),
+#     experience_certificate: UploadFile = File(None),
+#     driving_license: UploadFile = File(None),
+
+#     current_user_email: str = Depends(get_current_user_email),
+#     db: Session = Depends(get_db)
+# ):
+#     result = db.execute(
+#         select(User).where(User.email == payload.email)
+#     )
+
+#     user = result.scalars().first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
+
+#     if user.role.value != "field_engineer":
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Only Field Engineer can login"
+#         )
+
+#     if not pbkdf2_sha256.verify(
+#         payload.password,
+#         user.password_hash
+#     ):
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
+
+#     access_token = create_access_token(
+#         {"sub": user.email}
+#     )
+
+#     return {
+#         "message": "Field Engineer signed in successfully",
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "role": user.role.value
+#     }
+
+# @router.post("/complete-profile")
+@router.post("/complete-profile/{step}")
 async def complete_field_engineer_profile(
+    request: Request,
+  
+    step: int = Path(...),
 
     full_name: str = Form(...),
     date_of_birth: date = Form(None),
@@ -236,6 +314,10 @@ async def complete_field_engineer_profile(
     longitude: str = Form(None),
 
     profile_image: UploadFile = File(None),
+    day_of_week: int = Form(None),
+    start_time: time = Form(None),
+    end_time: time = Form(None),
+    is_available: bool = Form(True),
 
     identity_proof: UploadFile = File(None),
     education_certificate: UploadFile = File(None),
@@ -247,55 +329,25 @@ async def complete_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-    result = db.execute(
-        select(User).where(User.email == payload.email)
-    )
+    print("========== FE COMPLETE PROFILE API CALLED ==========")
+    form = await request.form()
 
-    user = result.scalars().first()
+    print("===== FORM DATA =====")
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+    for key, value in form.items():
+      print(key, "=", value)
 
-    if user.role.value != "field_engineer":
-        raise HTTPException(
-            status_code=403,
-            detail="Only Field Engineer can login"
-        )
+    print("=====================")
+    
 
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-
-    access_token = create_access_token(
-        {"sub": user.email}
-    )
-
-    return {
-        "message": "Field Engineer signed in successfully",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": user.role.value
-    }
-
-@router.post("/complete-profile")
-async def complete_field_engineer_profile(
-    payload: FieldEngineerProfileSchema,
-    current_user_email: str = Depends(get_current_user_email),
-    db: Session = Depends(get_db)
-):
     user = db.execute(
         select(User).where(
             User.email == current_user_email
         )
     ).scalars().first()
+    print("========== POST USER ==========")
+    print("Current Email:", current_user_email)
+    print("User ID:", user.id)
 
     if not user:
         raise HTTPException(
@@ -321,31 +373,58 @@ async def complete_field_engineer_profile(
         )
         db.add(profile)
         db.flush()
+        print("Profile ID:", profile.id)
+        print("==============================")
+      # ==================================================
+    # STEP 1 - COMPLETE YOUR PROFILE
+    # ==================================================
+    if step == 1:
 
-    # ----------------------------
-    # Save Profile
-    # ----------------------------
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
+        if full_name is not None:
+            profile.full_name = full_name
 
-    profile.is_associated_with_vendor = (
-        payload.is_associated_with_vendor
-    )
+        if date_of_birth is not None:
+            profile.date_of_birth = date_of_birth
 
-    profile.vendor_id = payload.vendor_id
-    profile.years_of_experience_id = (
-        payload.years_of_experience_id
-    )
-    profile.primary_specialization_id = (
-        payload.primary_specialization_id
-    )
+        if gender is not None:
+            profile.gender = gender
 
-    # ----------------------------
-    # Save Documents
-    # ----------------------------
-    if payload.documents:
+        if is_associated_with_vendor is not None:
+            profile.is_associated_with_vendor = is_associated_with_vendor
+
+        if vendor_id is not None:
+            profile.vendor_id = vendor_id
+
+        if years_of_experience_id is not None:
+            profile.years_of_experience_id = years_of_experience_id
+
+        if primary_specialization_id is not None:
+            profile.primary_specialization_id = primary_specialization_id
+
+        if profile_image:
+            os.makedirs("uploads/field_engineer", exist_ok=True)
+
+            image_path = f"uploads/field_engineer/{profile_image.filename}"
+
+            with open(image_path, "wb") as buffer:
+                shutil.copyfileobj(profile_image.file, buffer)
+
+            profile.profile_image = image_path
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 1,
+            "message": "Step 1 completed successfully.",
+            "profile_id": profile.id
+        }
+
+    # ==================================================
+    # STEP 2 - UPLOAD DOCUMENTS
+    # ==================================================
+    elif step == 2:
 
         document = db.execute(
             select(FieldEngineerDocument).where(
@@ -359,54 +438,167 @@ async def complete_field_engineer_profile(
             )
             db.add(document)
 
-        document.identity_proof = payload.documents.identity_proof
-        document.education_certificate = (
-            payload.documents.education_certificate
-        )
-        document.work_company_id = (
-            payload.documents.work_company_id
-        )
-        document.certification = (
-            payload.documents.certification
-        )
-        document.experience_certificate = (
-            payload.documents.experience_certificate
-        )
-        document.driving_license = (
-            payload.documents.driving_license
-        )
+        os.makedirs("uploads/field_engineer", exist_ok=True)
 
-    # ----------------------------
-    # Save Availability
-    # ----------------------------
-    if payload.availability:
+        if identity_proof:
+            identity_path = f"uploads/field_engineer/{identity_proof.filename}"
 
-        db.query(FieldEngineerAvailability).filter(
-            FieldEngineerAvailability.field_engineer_id == profile.id
-        ).delete()
+            with open(identity_path, "wb") as buffer:
+                shutil.copyfileobj(identity_proof.file, buffer)
 
-        for item in payload.availability:
+            document.identity_proof = identity_path
 
-            availability = FieldEngineerAvailability(
-                field_engineer_id=profile.id,
-                day_of_week=item.day_of_week,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                is_available=item.is_available
+        if education_certificate:
+            education_path = f"uploads/field_engineer/{education_certificate.filename}"
+
+            with open(education_path, "wb") as buffer:
+                shutil.copyfileobj(education_certificate.file, buffer)
+
+            document.education_certificate = education_path
+
+        if work_company_id:
+            company_path = f"uploads/field_engineer/{work_company_id.filename}"
+
+            with open(company_path, "wb") as buffer:
+                shutil.copyfileobj(work_company_id.file, buffer)
+
+            document.work_company_id = company_path
+
+        if certification:
+            certification_path = f"uploads/field_engineer/{certification.filename}"
+
+            with open(certification_path, "wb") as buffer:
+                shutil.copyfileobj(certification.file, buffer)
+
+            document.certification = certification_path
+
+        if experience_certificate:
+            experience_path = f"uploads/field_engineer/{experience_certificate.filename}"
+
+            with open(experience_path, "wb") as buffer:
+                shutil.copyfileobj(experience_certificate.file, buffer)
+
+            document.experience_certificate = experience_path
+
+        if driving_license:
+            license_path = f"uploads/field_engineer/{driving_license.filename}"
+
+            with open(license_path, "wb") as buffer:
+                shutil.copyfileobj(driving_license.file, buffer)
+
+            document.driving_license = license_path
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 2,
+            "message": "Step 2 completed successfully.",
+            "profile_id": profile.id
+        }
+        # ==================================================
+    # STEP 3 - SERVICE AREA
+    # ==================================================
+    elif step == 3:
+
+        service_area = db.execute(
+            select(FieldEngineerServiceArea).where(
+                FieldEngineerServiceArea.field_engineer_id == profile.id
             )
+        ).scalars().first()
 
+        if not service_area:
+            service_area = FieldEngineerServiceArea(
+                field_engineer_id=profile.id
+            )
+            db.add(service_area)
+
+        if primary_city is not None:
+            service_area.primary_city = primary_city
+
+        if service_radius is not None:
+            service_area.service_radius = service_radius
+
+        if preferred_work_areas is not None:
+            service_area.preferred_work_areas = preferred_work_areas
+
+        if latitude is not None:
+            service_area.latitude = latitude
+
+        if longitude is not None:
+            service_area.longitude = longitude
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 3,
+            "message": "Step 3 completed successfully.",
+            "profile_id": profile.id
+        }
+
+    # ==================================================
+    # STEP 4 - SET YOUR AVAILABILITY
+    # ==================================================
+    elif step == 4:
+
+        availability = db.execute(
+            select(FieldEngineerAvailability).where(
+                FieldEngineerAvailability.field_engineer_id == profile.id
+            )
+        ).scalars().first()
+
+        if not availability:
+            availability = FieldEngineerAvailability(
+                field_engineer_id=profile.id
+            )
             db.add(availability)
 
-    db.commit()
-    db.refresh(profile)
+        if day_of_week is not None:
+            availability.day_of_week = day_of_week
 
-    return {
-        "message": "Field Engineer profile completed successfully",
-        "profile_id": profile.id
-    }
+        if start_time is not None:
+            availability.start_time = start_time
+
+        if end_time is not None:
+            availability.end_time = end_time
+
+        availability.is_available = is_available
+
+        print("========== AVAILABILITY ==========")
+        print("Profile ID:", profile.id)
+        print("Day:", availability.day_of_week)
+        print("Start:", availability.start_time)
+        print("End:", availability.end_time)
+        print("Available:", availability.is_available)
+        print("==================================")
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 4,
+            "message": "Step 4 completed successfully.",
+            "profile_id": profile.id
+        }
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid step."
+        )
 
 
-@router.get("/profile")
+
+
+
+
+
+
+@router.get("/field-engineer/me")
 async def get_field_engineer_profile(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
@@ -425,6 +617,12 @@ async def get_field_engineer_profile(
     document = db.execute(
         select(FieldEngineerDocument).where(
             FieldEngineerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    service_area = db.execute(
+        select(FieldEngineerServiceArea).where(
+            FieldEngineerServiceArea.field_engineer_id == profile.id
         )
     ).scalars().first()
 
@@ -459,6 +657,14 @@ async def get_field_engineer_profile(
             "driving_license": document.driving_license if document else None
         },
 
+        "service_area": {
+            "primary_city": service_area.primary_city if service_area else None,
+            "service_radius": service_area.service_radius if service_area else None,
+            "preferred_work_areas": service_area.preferred_work_areas if service_area else None,
+            "latitude": service_area.latitude if service_area else None,
+            "longitude": service_area.longitude if service_area else None
+        },
+
         "availability": [
             {
                 "day_of_week": item.day_of_week,
@@ -470,12 +676,44 @@ async def get_field_engineer_profile(
         ]
     }
 
-
-
-
-@router.put("/profile")
+# @router.put("/profile")
+@router.put("/update")
 async def update_field_engineer_profile(
-    payload: FieldEngineerProfileSchema,
+    full_name: str = Form(None),
+    date_of_birth: date = Form(None),
+    gender: str = Form(None),
+    is_associated_with_vendor: bool = Form(None),
+    # vendor_id: Optional[int] = Form(None),
+    # years_of_experience_id: int = Form(None),
+    # primary_specialization_id: int = Form(None),
+
+    # profile_image: UploadFile = File(None),
+
+    vendor_id: Optional[int] = Form(None),
+    years_of_experience_id: int = Form(None),
+    primary_specialization_id: int = Form(None),
+
+    # STEP 3 - SERVICE AREA
+    primary_city: str = Form(None),
+    service_radius: int = Form(None),
+    preferred_work_areas: str = Form(None),
+    latitude: str = Form(None),
+    longitude: str = Form(None),
+
+    # STEP 4 - AVAILABILITY
+    day_of_week: int = Form(None),
+    start_time: time = Form(None),
+    end_time: time = Form(None),
+    is_available: bool = Form(True),
+
+    profile_image: UploadFile = File(None),
+    identity_proof: UploadFile = File(None),
+    education_certificate: UploadFile = File(None),
+    work_company_id: UploadFile = File(None),
+    certification: UploadFile = File(None),
+    experience_certificate: UploadFile = File(None),
+    driving_license: UploadFile = File(None),
+
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
@@ -493,69 +731,131 @@ async def update_field_engineer_profile(
     # ----------------------------
     # Update Profile
     # ----------------------------
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
+    profile.full_name = full_name
+    profile.date_of_birth = date_of_birth   
+    profile.gender = gender
+    profile.is_associated_with_vendor = is_associated_with_vendor
+    profile.vendor_id = vendor_id
+    profile.years_of_experience_id = years_of_experience_id
+    profile.primary_specialization_id = primary_specialization_id
 
-    profile.is_associated_with_vendor = (
-        payload.is_associated_with_vendor
-    )
-
-    profile.vendor_id = payload.vendor_id
-
-    profile.years_of_experience_id = (
-        payload.years_of_experience_id
-    )
-
-    profile.primary_specialization_id = (
-        payload.primary_specialization_id
-    )
-
+    if profile_image:
+        profile.profile_image = save_upload_file(
+           profile_image,
+           "uploads/field_engineer"
+        )
     # ----------------------------
     # Update Documents
     # ----------------------------
-    if payload.documents:
+    document = db.execute(
+        select(FieldEngineerDocument).where(
+           FieldEngineerDocument.user_profile_id == profile.id
+        )
+    ).scalars().first()
 
-        document = db.execute(
-            select(FieldEngineerDocument).where(
-                FieldEngineerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
+    if not document:
+        document = FieldEngineerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(document)
 
-        if not document:
-            document = FieldEngineerDocument(
-                user_profile_id=profile.id
-            )
-            db.add(document)
+    if identity_proof:
+        document.identity_proof = save_upload_file(
+            identity_proof,
+            "uploads/field_engineer"
+        )
 
-        document.identity_proof = payload.documents.identity_proof
-        document.education_certificate = payload.documents.education_certificate
-        document.work_company_id = payload.documents.work_company_id
-        document.certification = payload.documents.certification
-        document.experience_certificate = payload.documents.experience_certificate
-        document.driving_license = payload.documents.driving_license
+    if education_certificate:
+        document.education_certificate = save_upload_file(
+           education_certificate,
+           "uploads/field_engineer"
+        )
+
+    if work_company_id:
+        document.work_company_id = save_upload_file(
+           work_company_id,
+           "uploads/field_engineer"
+        )
+
+    if certification:
+        document.certification = save_upload_file(
+            certification,
+            "uploads/field_engineer"
+        )
+
+    if experience_certificate:
+        document.experience_certificate = save_upload_file(
+             experience_certificate,
+             "uploads/field_engineer"
+        )
+
+    if driving_license:
+        document.driving_license = save_upload_file(
+            driving_license,
+            "uploads/field_engineer"
+        )
+    # ----------------------------
+    # Update Service Area
+    # ----------------------------
+
+    service_area = db.execute(
+        select(FieldEngineerServiceArea).where(
+            FieldEngineerServiceArea.field_engineer_id == profile.id
+        )
+    ).scalars().first()
+
+    if not service_area:
+        service_area = FieldEngineerServiceArea(
+            field_engineer_id=profile.id
+        )
+        db.add(service_area)
+
+    service_area.primary_city = primary_city
+    service_area.service_radius = service_radius
+    service_area.preferred_work_areas = preferred_work_areas
+    service_area.latitude = latitude
+    service_area.longitude = longitude
 
     # ----------------------------
     # Update Availability
     # ----------------------------
-    if payload.availability:
 
-        db.query(FieldEngineerAvailability).filter(
+    availability = db.execute(
+        select(FieldEngineerAvailability).where(
             FieldEngineerAvailability.field_engineer_id == profile.id
-        ).delete()
+        )
+    ).scalars().first()
 
-        for item in payload.availability:
+    if not availability:
+        availability = FieldEngineerAvailability(
+           field_engineer_id=profile.id
+        )
+        db.add(availability)
 
-            availability = FieldEngineerAvailability(
-                field_engineer_id=profile.id,
-                day_of_week=item.day_of_week,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                is_available=item.is_available
-            )
+    availability.day_of_week = day_of_week
+    availability.start_time = start_time
+    availability.end_time = end_time
+    availability.is_available = is_available
+    # ----------------------------
+    # Update Availability
+    # ----------------------------
+    # if payload.availability:
 
-            db.add(availability)
+    #     db.query(FieldEngineerAvailability).filter(
+    #         FieldEngineerAvailability.field_engineer_id == profile.id
+    #     ).delete()
+
+    #     for item in payload.availability:
+
+    #         availability = FieldEngineerAvailability(
+    #             field_engineer_id=profile.id,
+    #             day_of_week=item.day_of_week,
+    #             start_time=item.start_time,
+    #             end_time=item.end_time,
+    #             is_available=item.is_available
+    #         )
+
+    #         db.add(availability)
 
     db.commit()
     db.refresh(profile)
@@ -565,60 +865,57 @@ async def update_field_engineer_profile(
         "profile_id": profile.id
     }
 
+# @router.post("/vendor/signin")
+# async def vendor_signin(
+#     payload: SigninSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     result = db.execute(
+#         select(User).where(User.email == payload.email)
+#     )
+
+#     user = result.scalars().first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
+
+#     if user.role != UserRole.VENDOR:
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Only Vendor can login"
+#         )
+
+#     if not pbkdf2_sha256.verify(
+#         payload.password,
+#         user.password_hash
+#     ):
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
+
+#     access_token = create_access_token(
+#         {"sub": user.email}
+#     )
+
+#     return {
+#         "message": "Vendor signed in successfully",
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "role": user.role.value
+#     }
 
 
-
-
-@router.post("/vendor/signin")
-async def vendor_signin(
-    payload: SigninSchema,
-    db: Session = Depends(get_db)
-):
-    result = db.execute(
-        select(User).where(User.email == payload.email)
-    )
-
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-
-    if user.role != UserRole.VENDOR:
-        raise HTTPException(
-            status_code=403,
-            detail="Only Vendor can login"
-        )
-
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-
-    access_token = create_access_token(
-        {"sub": user.email}
-    )
-
-    return {
-        "message": "Vendor signed in successfully",
-        "access_token": access_token,
-        "token_type": "bearer",
-        "role": user.role.value
-    }
-
-
-@router.post("/vendor/complete-profile")
-# async def vendor_complete_profile(
-#     payload: VendorProfileSchema,
-# async def vendor_complete_profile(
+# @router.post("/vendor/complete-profile")
+@router.post("/vendor/complete-profile/{step}")
 async def vendor_complete_profile(
+    
     request: Request,
+
+    step: int = Path(..., ge=1, le=6),
 
     company_name: str = Form(...),
     owner_manager_name: str = Form(...),
@@ -666,7 +963,47 @@ async def vendor_complete_profile(
     pan_card: UploadFile = File(None),
     registration_certificate: UploadFile = File(None),
     cancelled_cheque: UploadFile = File(None),
+    # other_document: UploadFile = File(None),
+
+    # current_user_email: str = Depends(get_current_user_email),
+    # db: Session = Depends(get_db)
+
     other_document: UploadFile = File(None),
+
+    # =========================
+    # STEP 4 - SERVICE COVERAGE
+    # =========================
+    service_state: str = Form(None),
+    service_city: str = Form(None),
+    service_radius: int = Form(None),
+    # ----------------------------
+    # STEP 5 - Workforce
+    # ----------------------------
+
+    total_engineers: int = Form(None),
+    certified_engineers: int = Form(None),
+    support_staff: int = Form(None),
+    
+
+    # ----------------------------
+    # STEP 6 - Bank Details
+    # ----------------------------
+
+    account_holder_name: str = Form(None),
+    bank_name: str = Form(None),
+    account_number: str = Form(None),
+    ifsc_code: str = Form(None),
+    branch_name: str = Form(None),
+
+    # ----------------------------
+    # STEP 7 - Notification Preferences
+    # ----------------------------
+
+    email_notification: bool = Form(True),
+    sms_notification: bool = Form(False),
+    push_notification: bool = Form(True),
+
+   
 
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
@@ -711,240 +1048,284 @@ async def vendor_complete_profile(
         db.add(profile)
         db.flush()
         # ----------------------------
-    # Save Vendor Profile
-    # ----------------------------
+    # =====================================
+    # STEP 1 - VENDOR PROFILE
+    # =====================================
+    if step == 1:
 
-    # profile.company_name = payload.company_name
-    # profile.owner_manager_name = payload.owner_manager_name
-    print("company_name =", company_name)
-    print("vendor_type =", vendor_type)
-    print("legal_business_name =", legal_business_name)
-    print("business_type =", business_type)
-    print("industry =", industry)
-    print("gst_number =", gst_number)
-    print("website =", website)
-    print("years_in_business =", years_in_business)
-    profile.company_name = company_name
-    profile.owner_manager_name = owner_manager_name
-    profile.vendor_type = vendor_type
-    profile.legal_business_name = legal_business_name
-    profile.business_type = business_type
-    profile.industry = industry
+        profile.company_name = company_name
+        profile.owner_manager_name = owner_manager_name
+        profile.vendor_type = vendor_type
+        profile.legal_business_name = legal_business_name
+        profile.business_type = business_type
+        profile.industry = industry
 
-    profile.company_registration_number = company_registration_number
-    profile.gst_number = gst_number
-    profile.pan_number = pan_number
+        profile.company_registration_number = company_registration_number
+        profile.gst_number = gst_number
+        profile.pan_number = pan_number
 
-    profile.website = website
-    profile.years_in_business = years_in_business
+        profile.website = website
+        profile.years_in_business = years_in_business
+        profile.employee_count = employee_count
 
-    profile.employee_count = employee_count
+        profile.primary_service_category = primary_service_category
+        profile.about_business = about_business
 
-    profile.primary_service_category = primary_service_category
-    profile.about_business = about_business
+        profile.address = address
+        profile.city = city
+        profile.state = state
+        profile.pincode = pincode
 
-    profile.address = address
-    profile.city = city
-    profile.state = state
-    profile.pincode = pincode
+        profile.timezone = timezone
+        profile.working_hours = working_hours
 
-    profile.timezone = timezone
-    profile.working_hours = working_hours
+        if profile_image:
 
-    if profile_image:
+            os.makedirs("uploads/vendor", exist_ok=True)
+
+            image_path = f"uploads/vendor/{profile_image.filename}"
+
+            with open(image_path, "wb") as buffer:
+                shutil.copyfileobj(profile_image.file, buffer)
+
+            profile.profile_image = image_path
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 1,
+            "message": "Step 1 completed successfully.",
+            "profile_id": profile.id
+        }
+
+
+    # =====================================
+    # STEP 2 - DOCUMENTS
+    # =====================================
+    elif step == 2:
+
+        document = db.execute(
+            select(VendorDocument).where(
+                VendorDocument.vendor_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not document:
+            document = VendorDocument(
+                vendor_profile_id=profile.id
+            )
+            db.add(document)
+
         os.makedirs("uploads/vendor", exist_ok=True)
 
-        image_path = f"uploads/vendor/{profile_image.filename}"
+        if gst_certificate:
+            gst_path = f"uploads/vendor/{gst_certificate.filename}"
 
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(profile_image.file, buffer)
+            with open(gst_path, "wb") as buffer:
+                shutil.copyfileobj(gst_certificate.file, buffer)
 
-        profile.profile_image = image_path
-    # ----------------------------
-    # Save Vendor Documents
-    # ----------------------------
-   # ----------------------------
-   # Save Vendor Documents
-   # ----------------------------
+            document.gst_certificate = gst_path
 
-    document = db.execute(
-        select(VendorDocument).where(
-           VendorDocument.vendor_profile_id == profile.id
+        if pan_card:
+            pan_path = f"uploads/vendor/{pan_card.filename}"
+
+            with open(pan_path, "wb") as buffer:
+                shutil.copyfileobj(pan_card.file, buffer)
+
+            document.pan_card = pan_path
+
+        if registration_certificate:
+            reg_path = f"uploads/vendor/{registration_certificate.filename}"
+
+            with open(reg_path, "wb") as buffer:
+                shutil.copyfileobj(registration_certificate.file, buffer)
+
+            document.registration_certificate = reg_path
+
+        if cancelled_cheque:
+            cheque_path = f"uploads/vendor/{cancelled_cheque.filename}"
+
+            with open(cheque_path, "wb") as buffer:
+                shutil.copyfileobj(cancelled_cheque.file, buffer)
+
+            document.cancelled_cheque = cheque_path
+
+        if other_document:
+            other_path = f"uploads/vendor/{other_document.filename}"
+
+            with open(other_path, "wb") as buffer:
+                shutil.copyfileobj(other_document.file, buffer)
+
+            document.other_document = other_path
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 2,
+            "message": "Step 2 completed successfully.",
+            "profile_id": profile.id
+        }
+    # =====================================
+    # STEP 3 - SERVICE COVERAGE
+    # =====================================
+    elif step == 3:
+
+        coverage = db.execute(
+            select(VendorServiceCoverage).where(
+                VendorServiceCoverage.vendor_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not coverage:
+            coverage = VendorServiceCoverage(
+                vendor_profile_id=profile.id
+            )
+            db.add(coverage)
+
+        if service_state is not None:
+            coverage.state = service_state
+
+        if service_city is not None:
+            coverage.city = service_city
+
+        if service_radius is not None:
+            coverage.service_radius = service_radius
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 3,
+            "message": "Step 3 completed successfully.",
+            "profile_id": profile.id
+        }
+
+
+    # =====================================
+    # STEP 4 - WORKFORCE
+    # =====================================
+    elif step == 4:
+
+        workforce = db.execute(
+            select(VendorWorkforce).where(
+                VendorWorkforce.vendor_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not workforce:
+            workforce = VendorWorkforce(
+                vendor_profile_id=profile.id
+            )
+            db.add(workforce)
+
+        if total_engineers is not None:
+            workforce.total_engineers = total_engineers
+
+        if certified_engineers is not None:
+            workforce.certified_engineers = certified_engineers
+
+        if support_staff is not None:
+            workforce.support_staff = support_staff
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 4,
+            "message": "Step 4 completed successfully.",
+            "profile_id": profile.id
+        }
+        # =====================================
+    # STEP 5 - BANK DETAILS
+    # =====================================
+    elif step == 5:
+
+        bank = db.execute(
+            select(VendorBankDetail).where(
+                VendorBankDetail.vendor_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not bank:
+            bank = VendorBankDetail(
+                vendor_profile_id=profile.id
+            )
+            db.add(bank)
+
+        if account_holder_name is not None:
+            bank.account_holder_name = account_holder_name
+
+        if bank_name is not None:
+            bank.bank_name = bank_name
+
+        if account_number is not None:
+            bank.account_number = account_number
+
+        if ifsc_code is not None:
+            bank.ifsc_code = ifsc_code
+
+        if branch_name is not None:
+            bank.branch_name = branch_name
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 5,
+            "message": "Step 5 completed successfully.",
+            "profile_id": profile.id
+        }
+
+
+    # =====================================
+    # STEP 6 - NOTIFICATION PREFERENCES
+    # =====================================
+    elif step == 6:
+
+        notification = db.execute(
+            select(VendorNotificationPreference).where(
+                VendorNotificationPreference.vendor_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not notification:
+            notification = VendorNotificationPreference(
+                vendor_profile_id=profile.id
+            )
+            db.add(notification)
+
+        if email_notification is not None:
+            notification.email_notification = email_notification
+
+        if sms_notification is not None:
+            notification.sms_notification = sms_notification
+
+        if push_notification is not None:
+            notification.push_notification = push_notification
+
+        db.commit()
+        db.refresh(profile)
+
+        return {
+            "success": True,
+            "step": 6,
+            "message": "Vendor profile completed successfully.",
+            "profile_id": profile.id
+        }
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid step."
         )
-    ).scalars().first()
-
-    if not document:
-        document = VendorDocument(
-          vendor_profile_id=profile.id
-        )
-        db.add(document)
-
-    os.makedirs("uploads/vendor", exist_ok=True)
-
-    if gst_certificate:
-        gst_path = f"uploads/vendor/{gst_certificate.filename}"
-
-        with open(gst_path, "wb") as buffer:
-            shutil.copyfileobj(gst_certificate.file, buffer)
-
-        document.gst_certificate = gst_path
-
-    if pan_card:
-        pan_path = f"uploads/vendor/{pan_card.filename}"
-
-        with open(pan_path, "wb") as buffer:
-            shutil.copyfileobj(pan_card.file, buffer)
-
-        document.pan_card = pan_path
-
-    if registration_certificate:
-        reg_path = f"uploads/vendor/{registration_certificate.filename}"
-
-        with open(reg_path, "wb") as buffer:
-            shutil.copyfileobj(registration_certificate.file, buffer)
-
-        document.registration_certificate = reg_path
-
-    if cancelled_cheque:
-       cheque_path = f"uploads/vendor/{cancelled_cheque.filename}"
-
-       with open(cheque_path, "wb") as buffer:
-            shutil.copyfileobj(cancelled_cheque.file, buffer)
-
-       document.cancelled_cheque = cheque_path
-
-    if other_document:
-        other_path = f"uploads/vendor/{other_document.filename}"
-
-        with open(other_path, "wb") as buffer:
-           shutil.copyfileobj(other_document.file, buffer)
-
-        document.other_document = other_path
-    # ----------------------------
-    # Save Service Coverage
-    # ----------------------------
-    # if payload.service_coverage:
-
-    #     db.query(VendorServiceCoverage).filter(
-    #         VendorServiceCoverage.vendor_profile_id == profile.id
-    #     ).delete()
-
-    #     for item in payload.service_coverage:
-
-    #         coverage = VendorServiceCoverage(
-    #             vendor_profile_id=profile.id,
-    #             state=item.state,
-    #             city=item.city,
-    #             service_radius=item.service_radius
-    #         )
-
-    #         db.add(coverage)
-            # ----------------------------
-    # Save Workforce
-    # ----------------------------
-    # if payload.workforce:
-
-    #     workforce = db.execute(
-    #         select(VendorWorkforce).where(
-    #             VendorWorkforce.vendor_profile_id == profile.id
-    #         )
-    #     ).scalars().first()
-
-    #     if not workforce:
-    #         workforce = VendorWorkforce(
-    #             vendor_profile_id=profile.id
-    #         )
-    #         db.add(workforce)
-
-    #     workforce.total_engineers = (
-    #         payload.workforce.total_engineers
-    #     )
-
-    #     workforce.certified_engineers = (
-    #         payload.workforce.certified_engineers
-    #     )
-
-    #     workforce.support_staff = (
-    #         payload.workforce.support_staff
-    #     )
-        # ----------------------------
-    # # Save Bank Details
-    # # ----------------------------
-    # if payload.bank_details:
-
-    #     bank = db.execute(
-    #         select(VendorBankDetail).where(
-    #             VendorBankDetail.vendor_profile_id == profile.id
-    #         )
-    #     ).scalars().first()
-
-    #     if not bank:
-    #         bank = VendorBankDetail(
-    #             vendor_profile_id=profile.id
-    #         )
-    #         db.add(bank)
-
-    #     bank.account_holder_name = (
-    #         payload.bank_details.account_holder_name
-    #     )
-
-    #     bank.bank_name = (
-    #         payload.bank_details.bank_name
-    #     )
-
-    #     bank.account_number = (
-    #         payload.bank_details.account_number
-    #     )
-
-    #     bank.ifsc_code = (
-    #         payload.bank_details.ifsc_code
-    #     )
-
-    #     bank.branch_name = (
-    #         payload.bank_details.branch_name
-    #     )
-    #     # ----------------------------
-    # # Save Notification Preferences
-    # # ----------------------------
-    # if payload.notification_preferences:
-
-    #     notification = db.execute(
-    #         select(VendorNotificationPreference).where(
-    #             VendorNotificationPreference.vendor_profile_id == profile.id
-    #         )
-    #     ).scalars().first()
-
-    #     if not notification:
-    #         notification = VendorNotificationPreference(
-    #             vendor_profile_id=profile.id
-    #         )
-    #         db.add(notification)
-
-    #     notification.email_notification = (
-    #         payload.notification_preferences.email_notification
-    #     )
-
-    #     notification.sms_notification = (
-    #         payload.notification_preferences.sms_notification
-    #     )
-
-    #     notification.push_notification = (
-    #         payload.notification_preferences.push_notification
-    #     )
-    print(profile.vendor_type)
-    print(profile.legal_business_name)
-    print(profile.business_type)
-    print(profile.industry)
-    print(profile.gst_number)
-    db.commit()
-    db.refresh(profile)
-
-    return {
-        "message": "Vendor profile completed successfully",
-        "profile_id": profile.id
-    }
     
-
 @router.get("/vendor/profile")
 async def get_vendor_profile(
     current_user_email: str = Depends(get_current_user_email),
@@ -1074,11 +1455,15 @@ async def get_vendor_profile(
 
 
 
+
+
 @router.put("/vendor/profile")
 async def update_vendor_profile(
 
-    company_name: str = Form(...),
-    owner_manager_name: str = Form(...),
+    # company_name: str = Form(...),
+    # owner_manager_name: str = Form(...),
+    company_name: str = Form(None),
+    owner_manager_name: str = Form(None),
 
     vendor_type: str = Form(None),
     legal_business_name: str = Form(None),
@@ -1150,32 +1535,65 @@ async def update_vendor_profile(
     # Update Vendor Profile
     # ----------------------------
 
-    profile.company_name = company_name
-    profile.owner_manager_name = owner_manager_name
+    if company_name is not None:
+        profile.company_name = company_name
 
-    profile.vendor_type = vendor_type
-    profile.legal_business_name = legal_business_name
-    profile.business_type = business_type
-    profile.industry = industry
+    if owner_manager_name is not None:
+        profile.owner_manager_name = owner_manager_name
 
-    profile.company_registration_number = company_registration_number
-    profile.gst_number = gst_number
-    profile.pan_number = pan_number
+    if vendor_type is not None:
+       profile.vendor_type = vendor_type
 
-    profile.website = website
-    profile.years_in_business = years_in_business
-    profile.employee_count = employee_count
+    if legal_business_name is not None:
+       profile.legal_business_name = legal_business_name
 
-    profile.primary_service_category = primary_service_category
-    profile.about_business = about_business
+    if business_type is not None:
+       profile.business_type = business_type
 
-    profile.address = address
-    profile.city = city
-    profile.state = state
-    profile.pincode = pincode
+    if industry is not None:
+        profile.industry = industry
 
-    profile.timezone = timezone
-    profile.working_hours = working_hours
+    if company_registration_number is not None:
+        profile.company_registration_number = company_registration_number
+
+    if gst_number is not None:
+        profile.gst_number = gst_number
+
+    if pan_number is not None:
+        profile.pan_number = pan_number
+
+    if website is not None:
+        profile.website = website
+
+    if years_in_business is not None:
+       profile.years_in_business = years_in_business
+
+    if employee_count is not None:
+        profile.employee_count = employee_count
+
+    if primary_service_category is not None:
+        profile.primary_service_category = primary_service_category
+
+    if about_business is not None:
+        profile.about_business = about_business
+
+    if address is not None:
+        profile.address = address
+
+    if city is not None:
+       profile.city = city
+
+    if state is not None:
+        profile.state = state
+
+    if pincode is not None:
+       profile.pincode = pincode
+
+    if timezone is not None:
+        profile.timezone = timezone
+
+    if working_hours is not None:
+        profile.working_hours = working_hours
 
     # ----------------------------
     # Update Profile Image
@@ -1253,6 +1671,12 @@ async def update_vendor_profile(
         "message": "Vendor profile updated successfully",
         "profile_id": profile.id
     }
+
+
+
+
+
+
 
 # Complete Customer Profile
 
