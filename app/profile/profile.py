@@ -1775,27 +1775,32 @@ async def complete_customer_profile(
             )
 
         return path
-
+    
     if step == 1:
+
         if not full_name:
-            raise HTTPException(400, "Full name is required.")
-
-        if not date_of_birth:
-            raise HTTPException(400, "Date of birth is required.")
-
-        if not gender:
-            raise HTTPException(400, "Gender is required.")
+            raise HTTPException(
+                status_code=400,
+                detail="Full name is required."
+            )
 
         if not phone_number:
-            raise HTTPException(400, "Phone number is required.")
+            raise HTTPException(
+                status_code=400,
+                detail="Phone number is required."
+            )
 
-        # Never allow changing the registered email
-
+        # Email cannot be changed
         if email and email != user.email:
             raise HTTPException(
                 status_code=400,
                 detail="Registered email cannot be changed."
             )
+
+        profile.full_name = full_name
+
+        # Update phone number in User table
+        user.phone_number = phone_number
 
         profile_image_path = save_file(profile_image)
 
@@ -1812,6 +1817,18 @@ async def complete_customer_profile(
 
     if step == 2:
 
+        if not identity_type:
+            raise HTTPException(
+                status_code=400,
+                detail="Identity type is required."
+            )
+
+        if not front_image:
+            raise HTTPException(
+                status_code=400,
+                detail="Front identity image is required."
+            )
+
         identity = db.execute(
             select(CustomerIdentity).where(
                 CustomerIdentity.user_profile_id == profile.id
@@ -1824,21 +1841,23 @@ async def complete_customer_profile(
             )
             db.add(identity)
 
-        if identity_type is not None:
-            identity.identity_type = identity_type
+        # Save selected ID type
+        identity.identity_type = identity_type
 
-        if identity_number is not None:
-            identity.identity_number = identity_number
-
+        # Save front image
         front_path = save_file(front_image)
-
         if front_path:
             identity.front_image = front_path
 
-        back_path = save_file(back_image)
+        # Back image is optional
+        if back_image:
+            back_path = save_file(back_image)
+            if back_path:
+                identity.back_image = back_path
 
-        if back_path:
-            identity.back_image = back_path
+        # Temporary until OCR is integrated
+        if identity_number:
+            identity.identity_number = identity_number
 
         db.commit()
 
@@ -1850,98 +1869,158 @@ async def complete_customer_profile(
 
     if step == 3:
 
-        business = db.execute(
-            select(CustomerBusiness).where(
-                CustomerBusiness.user_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        if not business:
-            business = CustomerBusiness(
-                user_profile_id=profile.id
-            )
-            db.add(business)
-
-        if company_name is not None:
-            business.company_name = company_name
-
-        if business_type is not None:
-            business.business_type = business_type
-
-        if industry is not None:
-            business.industry = industry
-
-        if website is not None:
-            business.website = website
-
-        if office_address is not None:
-            business.office_address = office_address
-
-        if city is not None:
-            business.city = city
-
-        if state is not None:
-            business.state = state
-
-        if pincode is not None:
-            business.pincode = pincode
-
-        if gst_number is not None:
-            business.gst_number = gst_number
-
-        if tax_number is not None:
-            business.tax_number = tax_number
-
-        if authorized_person_name is not None:
-            business.authorized_person_name = authorized_person_name
-
-        if designation is not None:
-            business.designation = designation
-
-        if work_email is not None:
-            business.work_email = work_email
-
-        if work_phone is not None:
-            business.work_phone = work_phone
-
-        db.commit()
-
-        return {
-            "success": True,
-            "step": 3,
-            "message": "Step 3 completed successfully."
-        }
+        if not company_name: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Company name is required." 
+            ) 
+    
+        if not business_type: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Business type is required." 
+            ) 
+    
+        if not industry: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Industry is required." 
+            ) 
+    
+        if not office_address: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Office address is required." 
+            ) 
+    
+        if not city: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="City is required." 
+            ) 
+    
+        if not state: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="State is required." 
+            ) 
+    
+        if not pincode: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Pincode is required." 
+            ) 
+    
+        if not authorized_person_name: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Authorized person name is required." 
+            ) 
+    
+        if not designation: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Designation is required." 
+            ) 
+    
+        if not work_email: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Work email is required." 
+            ) 
+    
+        if not work_phone: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Work phone is required." 
+            ) 
+    
+        business = db.execute( 
+            select(CustomerBusiness).where( 
+                CustomerBusiness.user_profile_id == profile.id 
+            ) 
+        ).scalars().first() 
+    
+        if not business: 
+            business = CustomerBusiness( 
+                user_profile_id=profile.id 
+            ) 
+            db.add(business) 
+    
+        business.company_name = company_name 
+        business.business_type = business_type 
+        business.industry = industry 
+        business.website = website          # Optional 
+        business.office_address = office_address 
+        business.city = city 
+        business.state = state 
+        business.pincode = pincode 
+        business.gst_number = gst_number    # Optional 
+        business.tax_number = tax_number    # Optional 
+        business.authorized_person_name = authorized_person_name 
+        business.designation = designation 
+        business.work_email = work_email 
+        business.work_phone = work_phone 
+    
+        db.commit() 
+    
+        return { 
+            "success": True, 
+            "step": 3, 
+            "message": "Step 3 completed successfully." 
+        } 
 
     if step == 4:
 
         documents = db.execute(
             select(CustomerDocument).where(
                 CustomerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
+                )
+                ).scalars().first()
 
         if not documents:
             documents = CustomerDocument(
                 user_profile_id=profile.id
-            )
+                )
             db.add(documents)
 
+       # Mandatory documents
+
+        if not gst_certificate:
+            raise HTTPException(
+                status_code=400,
+                detail="GST Certificate is required."
+            )
+
+        if not tax_identification_card:
+            raise HTTPException(
+                status_code=400,
+                detail="Tax Identification Card is required."
+            )
+
+        if not company_registration_certificate:
+            raise HTTPException(
+                status_code=400,
+                detail="Company Registration Certificate is required."
+            )
+
+        # Save files
+
         gst_path = save_file(gst_certificate)
-        if gst_path:
-            documents.gst_certificate = gst_path
+        documents.gst_certificate = gst_path
 
         tax_path = save_file(tax_identification_card)
-        if tax_path:
-            documents.tax_identification_card = tax_path
+        documents.tax_identification_card = tax_path
 
         company_path = save_file(company_registration_certificate)
-        if company_path:
-            documents.company_registration_certificate = company_path
+        documents.company_registration_certificate = company_path
 
+        # Optional
         moa_path = save_file(moa_aoa)
         if moa_path:
             documents.moa_aoa = moa_path
 
+        # Optional
         bank_path = save_file(bank_account_proof)
         if bank_path:
             documents.bank_account_proof = bank_path
@@ -1952,9 +2031,42 @@ async def complete_customer_profile(
             "success": True,
             "step": 4,
             "message": "Step 4 completed successfully."
-        }
+            }
 
     if step == 5:
+        if not tax_identification_card:
+            raise HTTPException(
+            status_code=400,
+            detail="Tax Identification Card is required."
+        )
+
+        documents = db.execute(
+            select(CustomerDocument).where(
+            CustomerDocument.user_profile_id == profile.id
+            )
+            ).scalars().first()
+
+        if not documents:
+            documents = CustomerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(documents)
+
+        if not tax_identification_card:
+            raise HTTPException(
+                status_code=400,
+                detail="Tax Identification Card is required."
+            )
+
+        tax_path = save_file(tax_identification_card)
+        documents.tax_identification_card = tax_path
+
+        bank_path = save_file(bank_account_proof)
+
+        if bank_path:
+            documents.bank_account_proof = bank_path
+
+        # Final validation before profile completion
 
         identity = db.execute(
             select(CustomerIdentity).where(
@@ -1968,15 +2080,7 @@ async def complete_customer_profile(
             )
         ).scalars().first()
 
-        documents = db.execute(
-            select(CustomerDocument).where(
-                CustomerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        # Optional validations
-
-        if not profile.full_name:
+        if not profile:
             raise HTTPException(
                 status_code=400,
                 detail="Step 1 is incomplete."
@@ -1994,24 +2098,17 @@ async def complete_customer_profile(
                 detail="Step 3 is incomplete."
             )
 
-        if not documents:
-            raise HTTPException(
-                status_code=400,
-                detail="Step 4 is incomplete."
-            )
+    db.commit()
+    db.refresh(profile)
 
-        db.commit()
-
-        db.refresh(profile)
-
-        return {
-            "success": True,
-            "step": 5,
-            "message": "Customer profile completed successfully.",
-            "profile_id": profile.id,
-            "email": user.email,
-            "phone_number": user.phone_number
-        }
+    return {
+        "success": True,
+        "step": 5,
+        "message": "Customer profile completed successfully.",
+        "profile_id": profile.id,
+        "email": user.email,
+        "phone_number": user.phone_number
+    }
     
 # Get Customer Profile
 
@@ -2063,8 +2160,6 @@ async def get_customer_profile(
 
         "profile": {
             "full_name": profile.full_name,
-            "date_of_birth": profile.date_of_birth,
-            "gender": profile.gender,
             "profile_image": profile.profile_image
         },
 
@@ -2090,6 +2185,7 @@ async def get_customer_profile(
             "authorized_person_name": business.authorized_person_name if business else None,
             "designation": business.designation if business else None,
             "work_email": business.work_email if business else None,
+            "work_phone": business.work_phone if business else None,
         },
 
         "documents": {
