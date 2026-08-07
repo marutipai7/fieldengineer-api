@@ -8,3 +8,5 @@ instance/
 *.db
 uploads/
 documents/
+.postman/
+postman/
