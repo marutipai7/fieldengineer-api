@@ -104,7 +104,11 @@ class UserProfile(Base):
         cascade="all, delete-orphan"
     )
 
-
+    services = relationship(
+        "FieldEngineerService",
+        back_populates="profile",
+        cascade="all, delete-orphan"
+    )
 
     customer_identity = relationship(
        "CustomerIdentity",
