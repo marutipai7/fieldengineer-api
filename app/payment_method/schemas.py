@@ -1,5 +1,7 @@
 from typing import Optional, Literal
 from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
 
 
 class PaymentBase(BaseModel):
@@ -91,3 +93,32 @@ class VerifyBankRequest(BaseModel):
 
 class VerifyCardRequest(BaseModel):
     payment_id: int
+    
+# ------------------------
+# Transaction_History
+# ------------------------
+
+class PaymentHistoryBase(BaseModel):
+    amount: float
+    status: str
+    transaction_reference: str | None = None
+
+
+class PaymentHistoryCreate(PaymentHistoryBase):
+    upi_payment_id: Optional[int] = None
+    card_payment_id: Optional[int] = None
+    net_banking_payment_id: Optional[int] = None
+
+
+class PaymentHistoryResponse(PaymentHistoryBase):
+    id: int
+    user_id: int
+
+    upi_payment_id: Optional[int] = None
+    card_payment_id: Optional[int] = None
+    net_banking_payment_id: Optional[int] = None
+
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
