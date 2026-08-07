@@ -18,6 +18,7 @@ from app.help_support.help import router as help_router
 from app.booking.lead import router as lead_router
 from app.fieldengineer.help import router as field_engineer_help_router
 from app.payment_method.payment import router as payment_router
+from app.fieldengineer.services import router as field_engineer_services_router
 
 
 
@@ -44,6 +45,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 app.include_router(lead_router)
 app.include_router(field_engineer_help_router)
+app.include_router(field_engineer_services_router)
 
 BASE_DIR = Path(__file__).resolve().parent
 
