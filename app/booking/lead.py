@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.profile.models import User, UserProfile
+from app.booking.models import FieldEngineerService
 from app.utils.auth_utils import get_current_user_email
 
-from app.profile.models import User
 from app.booking.models import (
     Booking,
     SiteDetail,
@@ -32,13 +33,15 @@ router = APIRouter(
 
 
 def _build_lead_response(
-    booking: Booking,
-    site_detail: SiteDetail | None,
-    address: BookingAddress | None,
-    contact_person: SiteContactPerson | None,
-    access_info: AccessInformation | None,
-    schedule: BookingSchedule | None,
-    documents: list[BookingDocument],
+    booking,
+    site_detail,
+    address,
+    contact_person,
+    access_info,
+    schedule,
+    documents,
+    match_score: int,
+    can_accept: bool,
 ) -> LeadResponse:
     return LeadResponse(
         id=booking.id,
@@ -68,6 +71,8 @@ def _build_lead_response(
         access_information=AccessInformationResponse.model_validate(access_info) if access_info else None,
         schedule=BookingScheduleResponse.model_validate(schedule) if schedule else None,
         documents=[BookingDocumentResponse.model_validate(doc) for doc in documents],
+        match_score=match_score,
+        can_accept=can_accept,
     )
 
 
@@ -85,6 +90,27 @@ async def get_lead_list(
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    profile = db.execute(
+        select(UserProfile).where(UserProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field Engineer profile not found"
+        )
+
+    engineer_services = db.execute(
+        select(FieldEngineerService).where(
+            FieldEngineerService.field_engineer_id == profile.id
+        )
+    ).scalars().all()
+
+    service_set = {
+        (service.service_id, service.sub_service_id)
+        for service in engineer_services
+    }
 
     bookings = db.execute(
         select(Booking).order_by(Booking.created_at.desc())
@@ -127,8 +153,19 @@ async def get_lead_list(
     for doc in documents:
         documents_map.setdefault(doc.booking_id, []).append(doc)
 
-    return [
-        _build_lead_response(
+    response = []
+
+    for booking in bookings:
+
+        is_match = (
+            booking.service_id,
+            booking.sub_service_id,
+        ) in service_set
+
+        match_score = 100 if is_match else 0
+        can_accept = is_match
+
+        lead = _build_lead_response(
             booking=booking,
             site_detail=site_detail_map.get(booking.id),
             address=address_map.get(booking.id),
@@ -136,9 +173,13 @@ async def get_lead_list(
             access_info=access_map.get(booking.id),
             schedule=schedule_map.get(booking.id),
             documents=documents_map.get(booking.id, []),
+            match_score=match_score,
+            can_accept=can_accept,
         )
-        for booking in bookings
-    ]
+
+        response.append(lead)
+
+    return response
 
 
 @router.get(
@@ -188,12 +229,37 @@ async def get_lead_by_id(
         select(BookingDocument).where(BookingDocument.booking_id == booking.id)
     ).scalars().all()
 
+    profile = db.execute(
+    select(UserProfile).where(UserProfile.user_id == user.id)
+    ).scalars().first()
+
+    engineer_services = db.execute(
+        select(FieldEngineerService).where(
+            FieldEngineerService.field_engineer_id == profile.id
+        )
+    ).scalars().all()
+
+    service_set = {
+        (service.service_id, service.sub_service_id)
+        for service in engineer_services
+    }
+
+    is_match = (
+        booking.service_id,
+        booking.sub_service_id,
+    ) in service_set
+
+    match_score = 100 if is_match else 0
+    can_accept = is_match
+
     return _build_lead_response(
-        booking=booking,
-        site_detail=site_detail,
-        address=address,
-        contact_person=contact_person,
-        access_info=access_info,
-        schedule=schedule,
-        documents=documents,
-    )
+    booking=booking,
+    site_detail=site_detail,
+    address=address,
+    contact_person=contact_person,
+    access_info=access_info,
+    schedule=schedule,
+    documents=documents,
+    match_score=match_score,
+    can_accept=can_accept,
+)

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from app.booking.models import ServiceType
 from datetime import datetime
-
+from decimal import Decimal
 
 # class BookingCreate(BaseModel):
 #     service_type: ServiceType
@@ -216,6 +216,8 @@ class LeadResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+    match_score: int = 0
+    can_accept: bool = False
 
     site_detail: SiteDetailResponse | None = None
     address: BookingAddressResponse | None = None
@@ -223,6 +225,24 @@ class LeadResponse(BaseModel):
     access_information: AccessInformationResponse | None = None
     schedule: BookingScheduleResponse | None = None
     documents: list[BookingDocumentResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class FieldEngineerServiceCreate(BaseModel):
+    service_id: int
+    sub_service_id: int
+    price: Decimal
+
+class FieldEngineerServiceResponse(BaseModel):
+    id: int
+    service_id: int
+    service_name: str
+
+    sub_service_id: int
+    sub_service_name: str
+
+    price: Decimal
 
     class Config:
         from_attributes = True
