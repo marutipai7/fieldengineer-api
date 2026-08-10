@@ -44,6 +44,12 @@ class Booking(Base):
         ForeignKey("users.id", ondelete="CASCADE")
     )
 
+    accepted_field_engineer_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
     booking_number = Column(String(50), unique=True)
 
     service_type = Column(

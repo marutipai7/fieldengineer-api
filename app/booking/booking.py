@@ -29,6 +29,12 @@ from app.booking.models import (
     BookingDocument
 )
 
+from app.booking.models import (
+    Service,
+    SubService,
+    FieldEngineerService,
+)
+
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
@@ -406,3 +412,133 @@ async def cancel_booking(
     return {
         "message": "Booking cancelled successfully"
     }
+
+@router.post(
+    "/{booking_id}/accept",
+    response_model=LeadResponse
+)
+async def accept_lead(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    current_user_email: str = Depends(get_current_user_email)
+):
+    # 1. Find logged-in user
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # 2. Find field engineer profile
+    profile = db.execute(
+        select(UserProfile).where(
+            UserProfile.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field Engineer profile not found"
+        )
+
+    # 3. Find the lead
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Lead not found"
+        )
+
+    # 4. Check whether this engineer provides
+    #    the service required by this lead
+    engineer_service = db.execute(
+        select(FieldEngineerService).where(
+            FieldEngineerService.field_engineer_id == profile.id,
+            FieldEngineerService.service_id == booking.service_id,
+            FieldEngineerService.sub_service_id == booking.sub_service_id,
+        )
+    ).scalars().first()
+
+    if not engineer_service:
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot accept this lead because the service does not match your added services"
+        )
+
+    # 5. Check whether somebody has already accepted it
+    if booking.accepted_field_engineer_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This lead has already been accepted"
+        )
+
+    # 6. Accept the lead
+    booking.accepted_field_engineer_id = profile.id
+
+    # 7. Update booking status
+    booking.booking_status = BookingStatus.CONFIRMED
+
+    # 8. Close the lead
+    booking.bid_status = "CLOSED"
+
+    db.commit()
+    db.refresh(booking)
+
+    # 9. Fetch related data
+    site_detail = db.execute(
+        select(SiteDetail).where(
+            SiteDetail.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    address = db.execute(
+        select(BookingAddress).where(
+            BookingAddress.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    contact_person = db.execute(
+        select(SiteContactPerson).where(
+            SiteContactPerson.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    access_info = db.execute(
+        select(AccessInformation).where(
+            AccessInformation.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    schedule = db.execute(
+        select(BookingSchedule).where(
+            BookingSchedule.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    documents = db.execute(
+        select(BookingDocument).where(
+            BookingDocument.booking_id == booking.id
+        )
+    ).scalars().all()
+
+    return _build_lead_response(
+        booking=booking,
+        site_detail=site_detail,
+        address=address,
+        contact_person=contact_person,
+        access_info=access_info,
+        schedule=schedule,
+        documents=documents,
+        match_score=100,
+        can_accept=False,
+    )
