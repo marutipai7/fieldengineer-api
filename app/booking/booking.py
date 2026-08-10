@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
 from sqlalchemy import select
 from app.booking.models import SiteDetail
+from app.profile.models import UserProfile
 import random
 from app.booking.models import (
     Booking,
@@ -59,7 +60,8 @@ from app.booking.schemas import (
     ServiceResponse,
     SubServiceResponse,
     SiteTypeResponse,
-    ProjectTypeResponse
+    ProjectTypeResponse,
+    LeadResponse
 )
 
 from app.booking.models import (
@@ -458,6 +460,29 @@ async def accept_lead(
             status_code=404,
             detail="Lead not found"
         )
+    print("========== ACCEPT LEAD DEBUG ==========")
+    print("Current user ID:", user.id)
+    print("Current user email:", user.email)
+    print("UserProfile ID:", profile.id)
+
+    print("Booking ID:", booking.id)
+    print("Booking service_id:", booking.service_id)
+    print("Booking sub_service_id:", booking.sub_service_id)
+
+    all_services = db.execute(
+        select(FieldEngineerService)
+    ).scalars().all()
+
+    for service in all_services:
+        print(
+            "FE SERVICE:",
+            "id=", service.id,
+            "field_engineer_id=", service.field_engineer_id,
+            "service_id=", service.service_id,
+            "sub_service_id=", service.sub_service_id
+        )
+
+    print("=======================================")
 
     # 4. Check whether this engineer provides
     #    the service required by this lead
@@ -531,14 +556,25 @@ async def accept_lead(
         )
     ).scalars().all()
 
-    return _build_lead_response(
-        booking=booking,
-        site_detail=site_detail,
-        address=address,
-        contact_person=contact_person,
-        access_info=access_info,
-        schedule=schedule,
-        documents=documents,
-        match_score=100,
-        can_accept=False,
-    )
+    return LeadResponse(
+    id=booking.id,
+    user_id=booking.user_id,
+    booking_number=booking.booking_number,
+    service_type=str(booking.service_type),
+    description=booking.description,
+    budget_min=booking.budget_min,
+    budget_max=booking.budget_max,
+    service_id=booking.service_id,
+    sub_service_id=booking.sub_service_id,
+    requirement_description=booking.requirement_description,
+    bid_status=booking.bid_status,
+    booking_status=booking.booking_status,
+    created_at=booking.created_at,
+    updated_at=booking.updated_at,
+    site_detail=site_detail,
+    address=address,
+    contact_person=contact_person,
+    access_information=access_info,
+    schedule=schedule,
+    documents=documents
+)

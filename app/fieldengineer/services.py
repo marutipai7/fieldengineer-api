@@ -61,7 +61,10 @@ def save_services(
     current_user_email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db),
 ):
-    # Get logged-in user
+    print("\n========== SAVE SERVICES ==========")
+    print("AUTH EMAIL:", current_user_email)
+
+    # 1. Get user
     user = (
         db.query(User)
         .filter(User.email == current_user_email)
@@ -70,11 +73,14 @@ def save_services(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="User not found"
         )
 
-    # Get field engineer profile
+    print("USER ID:", user.id)
+    print("USER EMAIL:", user.email)
+
+    # 2. Get profile
     profile = (
         db.query(UserProfile)
         .filter(UserProfile.user_id == user.id)
@@ -83,13 +89,23 @@ def save_services(
 
     if not profile:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=404,
             detail="Field Engineer profile not found"
         )
 
+    print("PROFILE ID:", profile.id)
+    print("PROFILE USER ID:", profile.user_id)
+
+    # 3. Save services
     for service in services:
 
-        # Check if service already exists
+        print(
+            "REQUEST SERVICE:",
+            "service_id =", service.service_id,
+            "sub_service_id =", service.sub_service_id,
+            "price =", service.price
+        )
+
         existing_service = (
             db.query(FieldEngineerService)
             .filter(
@@ -101,11 +117,18 @@ def save_services(
         )
 
         if existing_service:
-            # Update price if already exists
+
+            print(
+                "UPDATING EXISTING:",
+                existing_service.id,
+                "field_engineer_id =",
+                existing_service.field_engineer_id
+            )
+
             existing_service.price = service.price
 
         else:
-            # Save new service
+
             new_service = FieldEngineerService(
                 field_engineer_id=profile.id,
                 service_id=service.service_id,
@@ -115,10 +138,51 @@ def save_services(
 
             db.add(new_service)
 
+            print(
+                "CREATING:",
+                "field_engineer_id =", profile.id,
+                "service_id =", service.service_id,
+                "sub_service_id =", service.sub_service_id
+            )
+
     db.commit()
 
+    # 4. IMPORTANT: read database again AFTER commit
+    saved_services = (
+        db.query(FieldEngineerService)
+        .filter(
+            FieldEngineerService.field_engineer_id == profile.id
+        )
+        .all()
+    )
+
+    print("\n========== AFTER COMMIT ==========")
+
+    for s in saved_services:
+        print(
+            "DB SERVICE:",
+            "id =", s.id,
+            "field_engineer_id =", s.field_engineer_id,
+            "service_id =", s.service_id,
+            "sub_service_id =", s.sub_service_id,
+            "price =", s.price
+        )
+
+    print("===================================\n")
+
     return {
-        "message": "Services saved successfully"
+        "message": "Services saved successfully",
+        "profile_id": profile.id,
+        "services": [
+            {
+                "id": s.id,
+                "field_engineer_id": s.field_engineer_id,
+                "service_id": s.service_id,
+                "sub_service_id": s.sub_service_id,
+                "price": str(s.price),
+            }
+            for s in saved_services
+        ]
     }
 
 @router.get(
