@@ -19,6 +19,7 @@ from app.booking.lead import router as lead_router
 from app.fieldengineer.help import router as field_engineer_help_router
 from app.payment_method.payment import router as payment_router
 from app.fieldengineer.services import router as field_engineer_services_router
+from app.chat.chat import router as chat_router
 
 
 
@@ -91,3 +92,4 @@ app.include_router(address_router)
 app.include_router(booking_router)
 app.include_router(help_router)
 app.include_router(payment_router)
+app.include_router(chat_router)
