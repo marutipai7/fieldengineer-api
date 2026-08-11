@@ -415,19 +415,20 @@ async def cancel_booking(
         "message": "Booking cancelled successfully"
     }
 
-@router.post(
-    "/{booking_id}/accept",
-    response_model=LeadResponse
-)
-async def accept_lead(
+# User Accept API
+
+@router.post("/{booking_id}/accept")
+async def user_accept_booking(
     booking_id: int,
-    db: Session = Depends(get_db),
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
 ):
-    # 1. Find logged-in user
-    user = db.execute(
-        select(User).where(User.email == current_user_email)
-    ).scalars().first()
+
+    user = (
+        db.query(User)
+        .filter(User.email == current_user_email)
+        .first()
+    )
 
     if not user:
         raise HTTPException(
@@ -435,146 +436,81 @@ async def accept_lead(
             detail="User not found"
         )
 
-    # 2. Find field engineer profile
-    profile = db.execute(
-        select(UserProfile).where(
-            UserProfile.user_id == user.id
-        )
-    ).scalars().first()
+    print("USER ID:", user.id)
 
-    if not profile:
-        raise HTTPException(
-            status_code=404,
-            detail="Field Engineer profile not found"
-        )
-
-    # 3. Find the lead
-    booking = db.execute(
-        select(Booking).where(
-            Booking.id == booking_id
-        )
-    ).scalars().first()
+    booking = (
+    db.query(Booking)
+    .filter(Booking.id == booking_id)
+    .first()
+)
 
     if not booking:
         raise HTTPException(
             status_code=404,
-            detail="Lead not found"
-        )
-    print("========== ACCEPT LEAD DEBUG ==========")
-    print("Current user ID:", user.id)
-    print("Current user email:", user.email)
-    print("UserProfile ID:", profile.id)
-
-    print("Booking ID:", booking.id)
-    print("Booking service_id:", booking.service_id)
-    print("Booking sub_service_id:", booking.sub_service_id)
-
-    all_services = db.execute(
-        select(FieldEngineerService)
-    ).scalars().all()
-
-    for service in all_services:
-        print(
-            "FE SERVICE:",
-            "id=", service.id,
-            "field_engineer_id=", service.field_engineer_id,
-            "service_id=", service.service_id,
-            "sub_service_id=", service.sub_service_id
+            detail="Booking not found for this user"
         )
 
-    print("=======================================")
-
-    # 4. Check whether this engineer provides
-    #    the service required by this lead
-    engineer_service = db.execute(
-        select(FieldEngineerService).where(
-            FieldEngineerService.field_engineer_id == profile.id,
-            FieldEngineerService.service_id == booking.service_id,
-            FieldEngineerService.sub_service_id == booking.sub_service_id,
-        )
-    ).scalars().first()
-
-    if not engineer_service:
+    if booking.accepted_field_engineer_id is None:
         raise HTTPException(
-            status_code=403,
-            detail="You cannot accept this lead because the service does not match your added services"
+            status_code=400,
+            detail="No Field Engineer has been assigned to this booking"
         )
 
-    # 5. Check whether somebody has already accepted it
-    if booking.accepted_field_engineer_id is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="This lead has already been accepted"
-        )
-
-    # 6. Accept the lead
-    booking.accepted_field_engineer_id = profile.id
-
-    # 7. Update booking status
     booking.booking_status = BookingStatus.CONFIRMED
-
-    # 8. Close the lead
-    booking.bid_status = "CLOSED"
 
     db.commit()
     db.refresh(booking)
 
-    # 9. Fetch related data
-    site_detail = db.execute(
-        select(SiteDetail).where(
-            SiteDetail.booking_id == booking.id
-        )
-    ).scalars().first()
+    return {
+        "message": "Booking accepted successfully",
+        "booking_id": booking.id,
+        "booking_number": booking.booking_number,
+        "status": booking.booking_status.value
+    }
 
-    address = db.execute(
-        select(BookingAddress).where(
-            BookingAddress.booking_id == booking.id
-        )
-    ).scalars().first()
+# User Reject API
 
-    contact_person = db.execute(
-        select(SiteContactPerson).where(
-            SiteContactPerson.booking_id == booking.id
-        )
-    ).scalars().first()
+@router.post("/{booking_id}/reject")
+async def user_reject_booking(
+    booking_id: int,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user = (
+        db.query(User)
+        .filter(User.email == current_user_email)
+        .first()
+    )
 
-    access_info = db.execute(
-        select(AccessInformation).where(
-            AccessInformation.booking_id == booking.id
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
         )
-    ).scalars().first()
 
-    schedule = db.execute(
-        select(BookingSchedule).where(
-            BookingSchedule.booking_id == booking.id
+    booking = (
+        db.query(Booking)
+        .filter(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
         )
-    ).scalars().first()
+        .first()
+    )
 
-    documents = db.execute(
-        select(BookingDocument).where(
-            BookingDocument.booking_id == booking.id
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
         )
-    ).scalars().all()
 
-    return LeadResponse(
-    id=booking.id,
-    user_id=booking.user_id,
-    booking_number=booking.booking_number,
-    service_type=str(booking.service_type),
-    description=booking.description,
-    budget_min=booking.budget_min,
-    budget_max=booking.budget_max,
-    service_id=booking.service_id,
-    sub_service_id=booking.sub_service_id,
-    requirement_description=booking.requirement_description,
-    bid_status=booking.bid_status,
-    booking_status=booking.booking_status,
-    created_at=booking.created_at,
-    updated_at=booking.updated_at,
-    site_detail=site_detail,
-    address=address,
-    contact_person=contact_person,
-    access_information=access_info,
-    schedule=schedule,
-    documents=documents
-)
+    booking.booking_status = BookingStatus.CANCELLED
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking rejected successfully",
+        "booking_id": booking.id,
+        "booking_number": booking.booking_number,
+        "status": booking.booking_status.value
+    }
