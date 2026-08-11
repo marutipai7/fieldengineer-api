@@ -57,6 +57,11 @@ class UserProfile(Base):
        default=False
     )
 
+    work_preference = Column(
+    String(20),
+    nullable=True
+    )
+
     vendor_id = Column(
        Integer,
        ForeignKey("vendors.id"),
