@@ -246,3 +246,8 @@ class FieldEngineerServiceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class LeadListResponse(BaseModel):
+    booking_number: str | None = None
+    status: str | None = None
+    can_accept: bool = False
