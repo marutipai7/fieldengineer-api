@@ -23,11 +23,71 @@ from app.chat.chat import router as chat_router
 from app.inappcall.call import router as inappcall_router
 from app.fieldengineer.work_preferences import router as work_preference_router
 
+import redis.asyncio as redis
+
+from app.profile.models import User
+from app.booking.models import FieldEngineerService
+from app.notifications.models import Notification
+
+
+from app.notifications.routes import router as notifications_router
+from app.notifications.redis_listener import start_notification_listener
+
+
+
+# logger = logging.getLogger(__name__)
+
+# app = FastAPI(title="FieldEngineer API")
+
 
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="FieldEngineer API")
+notification_listener_task = None
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global notification_listener_task
+
+    logger.info("🚀 FieldEngineer API starting...")
+
+    redis_client = redis.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+    )
+
+    try:
+        await redis_client.ping()
+        logger.info("✅ Redis connected")
+
+        notification_listener_task = asyncio.create_task(
+            start_notification_listener(redis_client)
+        )
+        logger.info("✅ Notification listener task started")
+        yield
+
+    finally:
+        logger.info("🛑 FieldEngineer API shutting down...")
+
+        if notification_listener_task:
+            notification_listener_task.cancel()
+
+            try:
+                await notification_listener_task
+            except asyncio.CancelledError:
+                pass
+
+        await redis_client.close()
+
+
+app = FastAPI(
+    title="FieldEngineer API",
+    lifespan=lifespan,
+)
+
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -96,3 +156,4 @@ app.include_router(help_router)
 app.include_router(payment_router)
 app.include_router(chat_router)
 app.include_router(inappcall_router)
+app.include_router(notifications_router)
