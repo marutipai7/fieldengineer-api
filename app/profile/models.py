@@ -41,7 +41,8 @@ class User(Base):
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-
+    fcm_device_token = relationship("FCMDeviceToken",back_populates="user",uselist=False,cascade="all, delete-orphan,")
+    
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 

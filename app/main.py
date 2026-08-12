@@ -22,6 +22,7 @@ from app.fieldengineer.services import router as field_engineer_services_router
 from app.chat.chat import router as chat_router
 from app.inappcall.call import router as inappcall_router
 from app.fieldengineer.work_preferences import router as work_preference_router
+from app.notifications.routers import router as notification_router
 
 
 
@@ -96,3 +97,4 @@ app.include_router(help_router)
 app.include_router(payment_router)
 app.include_router(chat_router)
 app.include_router(inappcall_router)
+app.include_router(notification_router)
