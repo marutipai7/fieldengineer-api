@@ -50,22 +50,22 @@ class NotificationCreate(BaseModel):
 class NotificationResponse(BaseModel):
     """Schema for notification response."""
 
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+    )
+
     id: UUID
     user_id: int
     title: str
     message: str
     notification_type: NotificationType
-    entity_type: Optional[str]
-    entity_id: Optional[int]
-    type: NotificationDisplayType
-    notification_metadata: dict = Field(alias="notification_metadata")
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    type: NotificationDisplayType = NotificationDisplayType.INFO
+    notification_metadata: dict = Field(default_factory=dict)
     is_read: bool
-    created_at: datetime
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        populate_by_name=True,
-    )
+    created_at: datetime | None = None
 
 
 class NotificationUpdate(BaseModel):

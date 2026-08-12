@@ -12,6 +12,7 @@ from app.core.database import engine
 # from app.profile.registration import router as auth_rout
 from app.profile.auth.registration import router as auth_router
 from app.profile.profile import router as profile_router
+from app.profile.profile import invite_redirect_router
 from app.profile.address import router as address_router
 from app.booking.booking import router as booking_router
 from app.help_support.help import router as help_router
@@ -24,11 +25,83 @@ from app.inappcall.call import router as inappcall_router
 from app.fieldengineer.work_preferences import router as work_preference_router
 from app.notifications.routers import router as notification_router
 
+import redis.asyncio as redis
+
+from app.profile.models import User
+from app.booking.models import FieldEngineerService
+from app.notifications.models import Notification
+from app.notifications.redis_listener import start_notification_listener
+
+
+
+# logger = logging.getLogger(__name__)
+
+# app = FastAPI(title="FieldEngineer API")
+
 
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="FieldEngineer API")
+notification_listener_task = None
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global notification_listener_task
+
+    logger.info("🚀 FieldEngineer API starting...")
+
+    redis_client = None
+
+    try:
+        redis_client = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+        )
+
+        await redis_client.ping()
+        logger.info("✅ Redis connected")
+
+        notification_listener_task = asyncio.create_task(
+            start_notification_listener(redis_client)
+        )
+        logger.info("✅ Notification listener task started")
+
+    except Exception as exc:
+        logger.warning(
+            f"⚠️ Redis unavailable ({exc}). "
+            "Starting without real-time notifications."
+        )
+        notification_listener_task = None
+
+    try:
+        yield
+
+    finally:
+        logger.info("🛑 FieldEngineer API shutting down...")
+
+        if notification_listener_task:
+            notification_listener_task.cancel()
+
+            try:
+                await notification_listener_task
+            except asyncio.CancelledError:
+                pass
+
+        if redis_client is not None:
+            try:
+                await redis_client.close()
+            except Exception:
+                pass
+
+
+app = FastAPI(
+    title="FieldEngineer API",
+    lifespan=lifespan,
+)
+
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -90,6 +163,7 @@ def db_check():
 def db_url():
     return {"url": settings.database_url}
 app.include_router(auth_router)
+app.include_router(invite_redirect_router)
 app.include_router(profile_router)
 app.include_router(address_router)
 app.include_router(booking_router)

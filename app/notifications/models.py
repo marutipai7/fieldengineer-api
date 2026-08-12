@@ -19,6 +19,7 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 from app.profile.models import User
 
+
 class NotificationDisplayType(str, enum.Enum):
     """Enum for notification display type/category."""
 
@@ -46,19 +47,23 @@ class Notification(Base):
     notification_type = Column(
         String(50),
         nullable=False,
-    )  # bid_received, appointment_confirmed, payment_success, etc.
+    )
 
     entity_type = Column(
         String(50),
         nullable=True,
-    )  # appointment, order, bid, etc.
+    )
 
-    entity_id = Column(Integer, nullable=True)
+    entity_id = Column(
+        Integer,
+        nullable=True,
+    )
 
     type = Column(
         String(50),
         default="info",
-    )  # info, success, warning, error, promotion
+        nullable=False,
+    )
 
     notification_metadata = Column(
         JSONB,
@@ -66,11 +71,12 @@ class Notification(Base):
         nullable=False,
     )
 
-    is_read = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False,
     )
 
     __table_args__ = (
@@ -97,7 +103,6 @@ class Notification(Base):
 
     def to_dict(self) -> dict:
         """Serialize notification to dict for WebSocket/JSON delivery."""
-
         return {
             "id": str(self.id),
             "user_id": self.user_id,

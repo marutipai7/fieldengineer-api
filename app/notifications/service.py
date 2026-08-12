@@ -5,21 +5,20 @@ Centralized service for creating and publishing notifications.
 Handles DB insertion + Redis pub/sub integration.
 """
 
-import logging
 import json
+import logging
 from functools import wraps
-from typing import Callable, Optional, Any
-from sqlalchemy.orm import Session
-from sqlalchemy.future import select
+from typing import Any, Callable, Optional
+
 import redis.asyncio as redis
 from firebase_admin import messaging
-from app.notifications.firebase import initialize_firebase
-from app.notifications.models import (
-    Notification,
-    FCMDeviceToken,
-)
-from app.notifications.schemas import NotificationCreate, NotificationType
+from sqlalchemy.future import select
+from sqlalchemy.orm import Session
+
 from app.core.database import get_redis
+from app.notifications.firebase import initialize_firebase
+from app.notifications.models import FCMDeviceToken, Notification
+from app.notifications.schemas import NotificationCreate, NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 class NotificationService:
     """
     Service for creating notifications and publishing to Redis.
-    
+
     Flow:
     1. Insert into PostgreSQL
     2. Commit and refresh
@@ -43,55 +42,49 @@ class NotificationService:
     ) -> Notification:
         """
         Create a notification and publish to Redis.
-        
+
         Args:
             db: Session for database operations
             redis_client: Redis async client
             data: NotificationCreate schema
-        
+
         Returns:
             Saved Notification object
-        
+
         Behavior:
             - If DB fails: exception propagates
             - If Redis fails: logs error but does not rollback DB
         """
-        
+
         try:
-            # 1. Create notification object
             notification = Notification(
                 user_id=data.user_id,
                 title=data.title,
                 message=data.message,
-                notification_type=data.notification_type.value,  # Enum to string
+                notification_type=data.notification_type.value,
                 entity_type=data.entity_type,
                 entity_id=data.entity_id,
                 notification_metadata=data.metadata or {},
             )
-            
-            # 2. Insert into PostgreSQL
+
             db.add(notification)
             db.commit()
-            
-            # 3. Refresh to get created_at and other defaults
             db.refresh(notification)
-            
-            logger.info(f"✓ Notification created: id={notification.id}, user_id={data.user_id}")
-            
-            # 4. Build JSON payload
+
+            logger.info(
+                f"Notification created: id={notification.id}, user_id={data.user_id}"
+            )
+
             payload = notification.to_dict()
-            
-            # 5. Publish to Redis
+
             try:
                 await redis_client.publish("notifications", json.dumps(payload))
-                logger.debug(f"✓ Published to Redis: {notification.id}")
+                logger.debug(f"Published to Redis: {notification.id}")
             except Exception as redis_exc:
                 logger.error(f"Redis publish failed (non-blocking): {redis_exc}")
-                # Do NOT rollback - notification is already in DB
-                # It will be picked up by polling or other mechanisms
-            
+
             return notification
-        
+
         except Exception as exc:
             logger.error(f"Failed to create notification: {exc}")
             db.rollback()
@@ -1310,4 +1303,5 @@ def send_notification(
         return wrapper
     
     return decorator
+
 
