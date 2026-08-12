@@ -1,7 +1,10 @@
 import profile
 import uuid
+import secrets
+from datetime import datetime, timedelta, date, time
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request, Path
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request, Path, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from passlib.hash import pbkdf2_sha256
 from fastapi import Form, File, UploadFile
@@ -9,7 +12,6 @@ import shutil
 import os
 from fastapi import Request
 from typing import Optional
-from datetime import date, time
 
 
 
@@ -34,6 +36,7 @@ from app.profile.models import (
     VendorWorkforce,
     VendorBankDetail,
     VendorNotificationPreference,
+    EngineerInvitation,
 )
 
 from app.utils.auth_utils import (
@@ -49,6 +52,7 @@ from app.profile.schemas import (
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
+from app.core.config import settings
 
 from app.profile.models import (
     User,
@@ -1454,7 +1458,440 @@ async def get_vendor_profile(
     }
 
 
+@router.post("/vendor/invite-engineer")
+async def invite_engineer(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a new referral link for inviting an engineer.
+    Each time this endpoint is called, a new referral link is generated
+    with a 1-day expiry.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
 
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can invite engineers"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    # Generate unique referral token
+    referral_token = secrets.token_urlsafe(32)
+
+    # Set expiry to 24 hours from now
+    expires_at = datetime.now() + timedelta(days=1)
+
+    # Create referral link
+    referral_link = f"{settings.FRONTEND_URL}/profile/invite/engineer/{referral_token}"
+
+    # Create new invitation record
+    invitation = EngineerInvitation(
+        vendor_profile_id=profile.id,
+        referral_token=referral_token,
+        referral_link=referral_link,
+        expires_at=expires_at,
+        status="pending"
+    )
+
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    return {
+        "success": True,
+        "message": "Engineer invitation generated successfully",
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "referral_token": invitation.referral_token,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "status": invitation.status
+        }
+    }
+
+
+@router.get("/vendor/invitations")
+async def get_vendor_invitations(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all invitations sent by the current vendor.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can access invitations"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitations = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "invitation_id": inv.id,
+                "referral_link": inv.referral_link,
+                "created_at": inv.created_at,
+                "expires_at": inv.expires_at,
+                "is_used": inv.is_used,
+                "status": inv.status
+            }
+            for inv in invitations
+        ]
+    }
+
+
+@router.get("/vendor/invitation/{invitation_id}")
+async def get_invitation_details(
+    invitation_id: int = Path(...),
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details of a specific invitation.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can access invitation details"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.id == invitation_id,
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invitation not found"
+        )
+
+    return {
+        "success": True,
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "is_used": invitation.is_used,
+            "status": invitation.status
+        }
+    }
+
+
+@router.delete("/vendor/invitation/{invitation_id}")
+async def delete_invitation(
+    invitation_id: int = Path(...),
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete/revoke an invitation link.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can revoke invitations"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.id == invitation_id,
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invitation not found"
+        )
+
+    db.delete(invitation)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Invitation deleted successfully"
+    }
+
+
+@router.get("/invite/engineer/{token}")
+async def accept_engineer_invitation(
+    token: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Validate a referral link and redirect the engineer to the registration page.
+    
+    If the token is valid (not expired, not used, pending status), the engineer
+    is redirected to the frontend registration page with the token as a query parameter.
+    
+    If the token is invalid or expired, an error response is returned.
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check if already used
+    if invitation.is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has already been used"
+        )
+
+    # Check if expired
+    if datetime.now() > invitation.expires_at:
+        # Mark as expired in the database
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has expired. Please contact the vendor for a new invitation."
+        )
+
+    # Check status
+    if invitation.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This referral link is no longer valid (status: {invitation.status})"
+        )
+
+    # Redirect to frontend registration page with token
+    redirect_url = f"{settings.FRONTEND_URL}/register?referral_token={token}"
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/invite/engineer/{token}/consume")
+async def consume_engineer_invitation(
+    token: str = Path(...),
+    email: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark an invitation as used when an engineer completes registration.
+    
+    This endpoint is called when the engineer successfully creates their account.
+    It marks the invitation as used and links the engineer to the vendor.
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check if already used
+    if invitation.is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has already been used"
+        )
+
+    # Check if expired
+    if datetime.now() > invitation.expires_at:
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has expired"
+        )
+
+    # Check if status is pending
+    if invitation.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link is no longer valid"
+        )
+
+    # Get the user who just registered
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Check if the user is an engineer
+    if user.role != UserRole.FIELD_ENGINEER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only field engineers can consume this invitation"
+        )
+
+    # Mark invitation as used
+    invitation.is_used = True
+    invitation.used_by_user_id = user.id
+    invitation.status = "accepted"
+    
+    # Update contact info if provided
+    if email:
+        invitation.email = email
+    if phone_number:
+        invitation.phone_number = phone_number
+
+    db.commit()
+    db.refresh(invitation)
+
+    return {
+        "success": True,
+        "message": "Referral link successfully consumed",
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "vendor_profile_id": invitation.vendor_profile_id,
+            "status": invitation.status,
+            "is_used": invitation.is_used,
+            "used_at": datetime.now()
+        }
+    }
+
+
+@router.get("/invite/engineer/{token}/details")
+async def get_invitation_details_by_token(
+    token: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details of an invitation by token (for frontend validation before redirect).
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check expiry
+    is_expired = datetime.now() > invitation.expires_at
+
+    if is_expired and invitation.status == "pending":
+        invitation.status = "expired"
+        db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "is_used": invitation.is_used,
+            "status": invitation.status,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "is_expired": is_expired
+        }
+    }
 
 
 @router.put("/vendor/profile")
@@ -2043,8 +2480,8 @@ async def complete_customer_profile(
         documents = db.execute(
             select(CustomerDocument).where(
             CustomerDocument.user_profile_id == profile.id
-            )
-            ).scalars().first()
+                    )
+    ).scalars().first()
 
         if not documents:
             documents = CustomerDocument(
@@ -2442,3 +2879,27 @@ async def update_customer_profile(
         "email": user.email,
         "profile_id": profile.id
     }
+
+
+# ---------------------------------------------------------------
+# Backward-compatible router for legacy referral links
+# (older links were generated WITHOUT the /profile prefix).
+# Redirects /invite/engineer/{token} -> /profile/invite/engineer/{token}
+# ---------------------------------------------------------------
+invite_redirect_router = APIRouter(
+    tags=["Engineer Invitation"]
+)
+
+
+@invite_redirect_router.get("/invite/engineer/{token}")
+async def invite_engineer_legacy_redirect(
+    token: str = Path(...),
+):
+    """
+    Redirect legacy referral links (generated without the /profile
+    prefix) to the current invitation endpoint.
+    """
+    return RedirectResponse(
+        url=f"/profile/invite/engineer/{token}",
+        status_code=status.HTTP_302_FOUND,
+    )

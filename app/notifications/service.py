@@ -72,9 +72,14 @@ def create_notification(
         ),
     }
 
-    redis_client.publish(
-        "notifications",
-        json.dumps(payload),
-    )
+    try:
+        redis_client.publish(
+            "notifications",
+            json.dumps(payload),
+        )
+    except Exception:
+        # Redis may be unavailable; the notification is
+        # still saved in the database.
+        pass
 
     return notification

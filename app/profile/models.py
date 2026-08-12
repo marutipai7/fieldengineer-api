@@ -709,6 +709,44 @@ class VendorNotificationPreference(Base):
     vendor_profile = relationship("VendorProfile")
 
 
+class EngineerInvitation(Base):
+    __tablename__ = "engineer_invitations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    vendor_profile_id = Column(
+        Integer,
+        ForeignKey("vendor_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    referral_token = Column(String(255), unique=True, nullable=False, index=True)
+    referral_link = Column(Text, nullable=False)
+
+    email = Column(String(255))
+    phone_number = Column(String(20))
+
+    is_used = Column(Boolean, default=False)
+    used_by_user_id = Column(Integer, ForeignKey("users.id"))
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=False
+    )
+
+    status = Column(
+        Enum("pending", "accepted", "expired", name="invitation_status"),
+        default="pending"
+    )
+
+    vendor_profile = relationship("VendorProfile")
+
+
 class CustomerIdentity(Base):
     __tablename__ = "customer_identities"
 
