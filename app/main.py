@@ -12,6 +12,7 @@ from app.core.database import engine
 # from app.profile.registration import router as auth_rout
 from app.profile.auth.registration import router as auth_router
 from app.profile.profile import router as profile_router
+from app.profile.profile import invite_redirect_router
 from app.profile.address import router as address_router
 from app.booking.booking import router as booking_router
 from app.help_support.help import router as help_router
@@ -53,12 +54,14 @@ async def lifespan(app: FastAPI):
 
     logger.info("🚀 FieldEngineer API starting...")
 
-    redis_client = redis.from_url(
-        settings.REDIS_URL,
-        decode_responses=True,
-    )
+    redis_client = None
 
     try:
+        redis_client = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+        )
+
         await redis_client.ping()
         logger.info("✅ Redis connected")
 
@@ -66,6 +69,15 @@ async def lifespan(app: FastAPI):
             start_notification_listener(redis_client)
         )
         logger.info("✅ Notification listener task started")
+
+    except Exception as exc:
+        logger.warning(
+            f"⚠️ Redis unavailable ({exc}). "
+            "Starting without real-time notifications."
+        )
+        notification_listener_task = None
+
+    try:
         yield
 
     finally:
@@ -79,7 +91,11 @@ async def lifespan(app: FastAPI):
             except asyncio.CancelledError:
                 pass
 
-        await redis_client.close()
+        if redis_client is not None:
+            try:
+                await redis_client.close()
+            except Exception:
+                pass
 
 
 app = FastAPI(
@@ -149,6 +165,7 @@ def db_check():
 def db_url():
     return {"url": settings.database_url}
 app.include_router(auth_router)
+app.include_router(invite_redirect_router)
 app.include_router(profile_router)
 app.include_router(address_router)
 app.include_router(booking_router)
