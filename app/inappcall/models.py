@@ -43,7 +43,6 @@ class CallSession(Base):
         index=True,
     )
 
-    # Calling room
     room_id = Column(
         String(255),
         unique=True,
@@ -58,6 +57,13 @@ class CallSession(Base):
         nullable=False,
     )
 
+    # User receiving the call
+    receiver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
     call_type = Column(
         Enum(CallType),
         default=CallType.VIDEO,
@@ -68,16 +74,6 @@ class CallSession(Base):
         Enum(CallStatus),
         default=CallStatus.CREATED,
         nullable=False,
-    )
-
-    appointment_id = Column(
-        Integer,
-        nullable=True,
-    )
-
-    appointment_reference = Column(
-        String(100),
-        nullable=True,
     )
 
     notes = Column(
@@ -121,10 +117,19 @@ class CallSession(Base):
         onupdate=datetime.utcnow,
     )
 
-    caller = relationship("User")
+    caller = relationship(
+        "User",
+        foreign_keys=[caller_id],
+    )
+
+    receiver = relationship(
+        "User",
+        foreign_keys=[receiver_id],
+    )
 
     participants = relationship(
         "CallParticipant",
+        back_populates="call",
         cascade="all, delete-orphan",
     )
 
@@ -202,6 +207,9 @@ class CallParticipant(Base):
         default=datetime.utcnow,
     )
 
-    call = relationship("CallSession")
+    call = relationship(
+        "CallSession",
+        back_populates="participants",
+    )
 
     user = relationship("User")

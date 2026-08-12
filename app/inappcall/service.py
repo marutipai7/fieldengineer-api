@@ -9,8 +9,10 @@ from app.inappcall.models import (
     CallStatus,
     CallType,
 )
+from app.core.config import settings
 
-
+def build_join_url(room_id: str) -> str:
+    return f"{settings.FRONTEND_URL}/inappcall/{room_id}"
 def create_room_id():
     return str(uuid.uuid4())
 
@@ -18,35 +20,39 @@ def create_room_id():
 def create_call(
     db: Session,
     caller_id: int,
+    receiver_id: int,
     call_type: CallType = CallType.VIDEO,
-    appointment_id: int | None = None,
-    appointment_reference: str | None = None,
     notes: str | None = None,
 ):
     room_id = create_room_id()
+    join_url = build_join_url(room_id)
 
     call = CallSession(
         room_id=room_id,
         caller_id=caller_id,
+        receiver_id=receiver_id,
         call_type=call_type,
         status=CallStatus.CREATED,
-        appointment_id=appointment_id,
-        appointment_reference=appointment_reference,
         notes=notes,
+        join_url=join_url,
     )
 
     db.add(call)
-    db.commit()
-    db.refresh(call)
+    db.flush()
 
-    # Add caller as the first participant
     caller = CallParticipant(
         call_id=call.id,
         user_id=caller_id,
     )
 
-    db.add(caller)
+    receiver = CallParticipant(
+        call_id=call.id,
+        user_id=receiver_id,
+    )
+
+    db.add_all([caller, receiver])
     db.commit()
+    db.refresh(call)
 
     return call
 
@@ -56,26 +62,24 @@ def create_group_call(
     caller_id: int,
     participant_ids: list[int],
     call_type: CallType = CallType.VIDEO,
-    appointment_id: int | None = None,
-    appointment_reference: str | None = None,
     notes: str | None = None,
 ):
     room_id = create_room_id()
+    join_url = build_join_url(room_id)
 
     call = CallSession(
         room_id=room_id,
         caller_id=caller_id,
+        receiver_id=None,
         call_type=call_type,
         status=CallStatus.CREATED,
-        appointment_id=appointment_id,
-        appointment_reference=appointment_reference,
         notes=notes,
+        join_url=join_url,
     )
 
     db.add(call)
     db.flush()
 
-    # Make sure caller is included
     all_participants = set(participant_ids)
     all_participants.add(caller_id)
 
@@ -84,7 +88,6 @@ def create_group_call(
             call_id=call.id,
             user_id=user_id,
         )
-
         db.add(participant)
 
     db.commit()
