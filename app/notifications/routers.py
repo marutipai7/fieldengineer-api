@@ -57,7 +57,7 @@ async def websocket_endpoint(
 
     try:
         # -------------------------
-        # Authenticate user
+        # Validate token before accepting
         # -------------------------
         try:
             payload = jwt.decode(
@@ -65,49 +65,41 @@ async def websocket_endpoint(
                 settings.SECRET_KEY,
                 algorithms=[settings.ALGORITHM],
             )
-
             email = payload.get("sub")
 
             if not email:
+                await websocket.accept()
                 await websocket.close(
                     code=1008,
-                    reason="Invalid token",
+                    reason="Invalid token: no email",
                 )
-                logger.warning(
-                    "WebSocket auth failed: no email in token"
-                )
+                logger.warning("WebSocket auth failed: no email in token")
                 return
 
         except jwt.InvalidTokenError as exc:
+            await websocket.accept()
             await websocket.close(
                 code=1008,
                 reason="Invalid token",
             )
-            logger.warning(
-                f"WebSocket auth failed: {exc}"
-            )
+            logger.warning(f"WebSocket auth failed: {exc}")
             return
 
         # -------------------------
         # Get user from database
         # -------------------------
         db: Session = next(get_db())
-
         try:
-            user = (
-                db.query(User)
-                .filter(User.email == email)
-                .first()
-            )
+            user = db.query(User).filter(User.email == email).first()
 
             if not user:
+                await websocket.accept()
                 await websocket.close(
                     code=1008,
                     reason="User not found",
                 )
                 logger.warning(
-                    f"WebSocket auth failed: "
-                    f"user not found for email {email}"
+                    f"WebSocket auth failed: user not found for email {email}"
                 )
                 return
 
@@ -117,32 +109,22 @@ async def websocket_endpoint(
             db.close()
 
         logger.info(
-            f"WebSocket user authenticated: "
-            f"email={email}, user_id={user_id}"
+            f"WebSocket user authenticated: email={email}, user_id={user_id}"
         )
 
         # -------------------------
-        # Accept WebSocket
+        # Accept WebSocket and add to manager
         # -------------------------
-        await ws_manager.connect(
-            user_id,
-            websocket,
-        )
-
-        logger.info(
-            f"WebSocket connected: user_id={user_id}"
-        )
+        await ws_manager.connect(user_id, websocket)
+        logger.info(f"WebSocket connected: user_id={user_id}")
 
         # -------------------------
-        # Keep socket alive
+        # Keep socket alive and handle messages
         # -------------------------
         while True:
             try:
                 data = await websocket.receive_text()
-
-                logger.debug(
-                    f"Received from {user_id}: {data}"
-                )
+                logger.debug(f"Received from {user_id}: {data}")
 
                 if data == "ping":
                     await websocket.send_text("pong")
@@ -151,21 +133,14 @@ async def websocket_endpoint(
                 break
 
     except WebSocketDisconnect:
-        logger.info(
-            f"WebSocket disconnected: user_id={user_id}"
-        )
+        logger.info(f"WebSocket disconnected: user_id={user_id}")
 
-    except Exception:
-        logger.exception(
-            f"WebSocket error for user {user_id}"
-        )
+    except Exception as exc:
+        logger.exception(f"WebSocket error for user {user_id}: {exc}")
 
     finally:
         if user_id is not None:
-            await ws_manager.disconnect(
-                user_id,
-                websocket,
-            )
+            await ws_manager.disconnect(user_id, websocket)
 
 
 # ============================================================================
@@ -217,7 +192,7 @@ def get_notifications(
     "/fcm-token",
     response_model=FCMTokenResponse,
 )
-def save_fcm_token(
+async def save_fcm_token(
     request: FCMTokenRequest,
     db: Session = Depends(get_db),
     _auth=Depends(check_authorization_key),
@@ -225,7 +200,7 @@ def save_fcm_token(
 ):
     user, _ = current_user
 
-    NotificationService.save_fcm_token(
+    await NotificationService.save_fcm_token(
         db=db,
         user_id=user.id,
         fcm_token=request.fcm_token,

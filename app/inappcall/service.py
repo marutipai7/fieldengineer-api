@@ -9,15 +9,11 @@ from app.inappcall.models import (
     CallStatus,
     CallType,
 )
-<<<<<<< HEAD
-
-
-=======
 from app.core.config import settings
+from fastapi import HTTPException
 
 def build_join_url(room_id: str) -> str:
-    return f"{settings.FRONTEND_URL}/inappcall/{room_id}"
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
+    return f"https://meet.jit.si/{room_id}"
 def create_room_id():
     return str(uuid.uuid4())
 
@@ -25,39 +21,16 @@ def create_room_id():
 def create_call(
     db: Session,
     caller_id: int,
-<<<<<<< HEAD
-    call_type: CallType = CallType.VIDEO,
-    appointment_id: int | None = None,
-    appointment_reference: str | None = None,
-    notes: str | None = None,
-):
-    room_id = create_room_id()
-=======
     receiver_id: int,
     call_type: CallType = CallType.VIDEO,
     notes: str | None = None,
 ):
     room_id = create_room_id()
     join_url = build_join_url(room_id)
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
     call = CallSession(
         room_id=room_id,
         caller_id=caller_id,
-<<<<<<< HEAD
-        call_type=call_type,
-        status=CallStatus.CREATED,
-        appointment_id=appointment_id,
-        appointment_reference=appointment_reference,
-        notes=notes,
-    )
-
-    db.add(call)
-    db.commit()
-    db.refresh(call)
-
-    # Add caller as the first participant
-=======
         receiver_id=receiver_id,
         call_type=call_type,
         status=CallStatus.CREATED,
@@ -68,16 +41,11 @@ def create_call(
     db.add(call)
     db.flush()
 
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     caller = CallParticipant(
         call_id=call.id,
         user_id=caller_id,
     )
 
-<<<<<<< HEAD
-    db.add(caller)
-    db.commit()
-=======
     receiver = CallParticipant(
         call_id=call.id,
         user_id=receiver_id,
@@ -86,7 +54,6 @@ def create_call(
     db.add_all([caller, receiver])
     db.commit()
     db.refresh(call)
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
     return call
 
@@ -96,44 +63,24 @@ def create_group_call(
     caller_id: int,
     participant_ids: list[int],
     call_type: CallType = CallType.VIDEO,
-<<<<<<< HEAD
-    appointment_id: int | None = None,
-    appointment_reference: str | None = None,
-    notes: str | None = None,
-):
-    room_id = create_room_id()
-=======
     notes: str | None = None,
 ):
     room_id = create_room_id()
     join_url = build_join_url(room_id)
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
     call = CallSession(
         room_id=room_id,
         caller_id=caller_id,
-<<<<<<< HEAD
-        call_type=call_type,
-        status=CallStatus.CREATED,
-        appointment_id=appointment_id,
-        appointment_reference=appointment_reference,
-        notes=notes,
-=======
         receiver_id=None,
         call_type=call_type,
         status=CallStatus.CREATED,
         notes=notes,
         join_url=join_url,
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     )
 
     db.add(call)
     db.flush()
 
-<<<<<<< HEAD
-    # Make sure caller is included
-=======
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     all_participants = set(participant_ids)
     all_participants.add(caller_id)
 
@@ -142,10 +89,6 @@ def create_group_call(
             call_id=call.id,
             user_id=user_id,
         )
-<<<<<<< HEAD
-
-=======
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
         db.add(participant)
 
     db.commit()
@@ -159,6 +102,16 @@ def add_participant(
     call_id: int,
     user_id: int,
 ):
+    call = db.query(CallSession).filter(
+        CallSession.id == call_id
+    ).first()
+
+    if not call:
+        raise HTTPException(
+            status_code=404,
+            detail="Call not found",
+        )
+    
     participant = CallParticipant(
         call_id=call_id,
         user_id=user_id,
@@ -168,7 +121,21 @@ def add_participant(
     db.commit()
     db.refresh(participant)
 
-    return participant
+    return {
+        "id": participant.id,
+        "call_id": participant.call_id,
+        "user_id": participant.user_id,
+        "peer_name": participant.peer_name,
+        "peer_avatar": participant.peer_avatar,
+        "audio_enabled": participant.audio_enabled,
+        "video_enabled": participant.video_enabled,
+        "screen_enabled": participant.screen_enabled,
+        "presenter": participant.presenter,
+        "joined_at": participant.joined_at,
+        "left_at": participant.left_at,
+        "created_at": participant.created_at,
+        "join_url": build_join_url(call.room_id),
+    }
 
 
 def update_call_status(

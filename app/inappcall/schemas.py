@@ -108,12 +108,11 @@ class CallResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-
 # Call response
 class CallResponse(BaseModel):
     id: int
     room_id: str
-
+    join_url: str
     caller_id: int
     receiver_id: Optional[int] = None
 

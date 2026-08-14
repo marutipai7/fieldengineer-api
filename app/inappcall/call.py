@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -10,9 +12,12 @@ from app.inappcall.schemas import (
     CallStatusUpdate,
     GroupCallCreate,
 )
-from app.core.database import get_db
+from app.core.database import get_db, get_redis
 from app.utils.auth_utils import get_current_user_object
+from app.notifications.service import NotificationService
+from app.notifications.schemas import NotificationCreate, NotificationType
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/inappcall",
@@ -25,28 +30,79 @@ router = APIRouter(
     response_model=CallResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_call(
+async def create_call(
     data: CallCreate,
     current_user: dict = Depends(get_current_user_object),
     db: Session = Depends(get_db),
 ):
     call = service.create_call(
-<<<<<<< HEAD
         db=db,
         caller_id=current_user[0].id,
+        receiver_id=data.receiver_id,
         call_type=CallType(data.call_type),
-        appointment_id=data.appointment_id,
-        appointment_reference=data.appointment_reference,
         notes=data.notes,
     )
-=======
-    db=db,
-    caller_id=current_user[0].id,
-    receiver_id=data.receiver_id,
-    call_type=CallType(data.call_type),
-    notes=data.notes,
-)
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
+
+    try:
+        redis_client = await get_redis()
+
+        notification_title = "Incoming Call"
+        notification_message = (
+            f"You have an incoming {call.call_type.value} call"
+        )
+        notification_type = NotificationType.INCOMING_CALL
+        entity_type = "call"
+        entity_id = call.id
+
+        await NotificationService.create_notification(
+            db=db,
+            redis_client=redis_client,
+            data=NotificationCreate(
+                user_id=call.receiver_id,
+                title=notification_title,
+                message=notification_message,
+                notification_type=notification_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                metadata={
+                    "auto_generated": True,
+                    "call_id": call.id,
+                    "room_id": call.room_id,
+                    "join_url": call.join_url,
+                    "caller_id": call.caller_id,
+                },
+            ),
+        )
+
+        try:
+            logger.info(
+                f"🔥 About to send FCM notification "
+                f"to user_id={call.receiver_id}"
+            )
+            fcm_result = await NotificationService.send_push_notification(
+                db=db,
+                user_id=call.receiver_id,
+                title=notification_title,
+                body=notification_message,
+                data={
+                    "notification_type": notification_type.value,
+                    "entity_type": entity_type,
+                    "entity_id": str(entity_id or ""),
+                },
+            )
+            logger.info(f"🔥 FCM send result: {fcm_result}")
+        except Exception as exc:
+            logger.exception(
+                "FCM call notification failed (non-blocking) "
+                "for user_id=%s: %s",
+                call.receiver_id,
+                exc,
+            )
+
+    except Exception as exc:
+        logger.error(
+            f"Failed to create call notification: {exc}"
+        )
 
     return call
 
@@ -66,11 +122,6 @@ def create_group_call(
         caller_id=current_user[0].id,
         participant_ids=data.participant_ids,
         call_type=CallType(data.call_type),
-<<<<<<< HEAD
-        appointment_id=data.appointment_id,
-        appointment_reference=data.appointment_reference,
-=======
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
         notes=data.notes,
     )
 

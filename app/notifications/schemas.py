@@ -61,7 +61,7 @@ class NotificationType(str, Enum):
     COUPON_NEW = "coupon_new"
     SYSTEM_ALERT = "system_alert"
     REVIEW_RECEIVED = "review_received"
-
+    INCOMING_CALL = "incoming_call"
 
 class NotificationDisplayType(str, Enum):
     """Enum for notification display type/category."""

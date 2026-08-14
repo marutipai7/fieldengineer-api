@@ -1,90 +1,3 @@
-<<<<<<< HEAD
-import json
-import redis
-
-from sqlalchemy.orm import Session
-
-from app.core.config import settings
-from app.notifications.models import Notification
-
-
-redis_client = redis.Redis.from_url(
-    settings.REDIS_URL,
-    decode_responses=True,
-)
-
-
-def create_notification(
-    *,
-    user_id: int,
-    title: str,
-    message: str,
-    notification_type: str,
-    db: Session,
-    entity_type: str | None = None,
-    entity_id: int | None = None,
-    notification_type_display: str = "info",
-    metadata: dict | None = None,
-) -> Notification:
-    """
-    Central notification creator.
-
-    Creates and stores an in-app notification
-    for a specific user.
-    """
-
-    notification = Notification(
-        user_id=user_id,
-        title=title,
-        message=message,
-        notification_type=notification_type,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        type=notification_type_display,
-        notification_metadata=metadata or {},
-    )
-
-    # db.add(notification)
-    # db.commit()
-    # db.refresh(notification)
-
-    # return notification
-
-
-    db.add(notification)
-    db.commit()
-    db.refresh(notification)
-
-    payload = {
-       "id": str(notification.id),
-        "user_id": notification.user_id,
-        "title": notification.title,
-        "message": notification.message,
-        "notification_type": notification.notification_type,
-        "entity_type": notification.entity_type,
-        "entity_id": notification.entity_id,
-        "type": notification.type,
-        "metadata": notification.notification_metadata or {},
-        "is_read": notification.is_read,
-        "created_at": (
-            notification.created_at.isoformat()
-            if notification.created_at
-            else None
-        ),
-    }
-
-    try:
-        redis_client.publish(
-            "notifications",
-            json.dumps(payload),
-        )
-    except Exception:
-        # Redis may be unavailable; the notification is
-        # still saved in the database.
-        pass
-
-    return notification
-=======
 """
 Notification Service
 
@@ -263,21 +176,21 @@ class NotificationService:
         Send push notification to a user using Firebase Cloud Messaging.
         """
 
-        initialize_firebase()
-
-        token_record = db.execute(
-            select(FCMDeviceToken).where(
-                FCMDeviceToken.user_id == user_id
-            )
-        ).scalar_one_or_none()
-
-        if not token_record:
-            logger.warning(
-                f"No FCM token found for user_id={user_id}"
-            )
-            return False
-
         try:
+            initialize_firebase()
+
+            token_record = db.execute(
+                select(FCMDeviceToken).where(
+                    FCMDeviceToken.user_id == user_id
+                )
+            ).scalar_one_or_none()
+
+            if not token_record:
+                logger.warning(
+                    f"No FCM token found for user_id={user_id}"
+                )
+                return False
+
             message = messaging.Message(
                 notification=messaging.Notification(
                     title=title,
@@ -291,7 +204,7 @@ class NotificationService:
             )
 
             response = messaging.send(message)
-            print("Firebase Message ID:", response)
+            logger.info("Firebase Message ID: %s", response)
 
             logger.info(
                 f"Push notification sent successfully. "
@@ -299,6 +212,42 @@ class NotificationService:
             )
 
             return True
+
+        except messaging.UnregisteredError:
+            # FCM has confirmed that this registration token is no longer
+            # associated with an installed app instance. Retaining it would
+            # cause every subsequent notification for this user to fail.
+            logger.warning(
+                "FCM token is unregistered; deleting stale token for "
+                "user_id=%s. The device must register a fresh token.",
+                user_id,
+            )
+            try:
+                db.delete(token_record)
+                db.commit()
+                logger.info(
+                    "Deleted unregistered FCM token for user_id=%s",
+                    user_id,
+                )
+            except Exception as cleanup_exc:
+                db.rollback()
+                logger.exception(
+                    "Failed to delete unregistered FCM token for "
+                    "user_id=%s: %s",
+                    user_id,
+                    cleanup_exc,
+                )
+            return False
+
+        except messaging.SenderIdMismatchError as exc:
+            logger.error(
+                "FCM sender/project mismatch for user_id=%s. Verify that "
+                "the mobile app token and Firebase service-account JSON "
+                "belong to the same Firebase project: %s",
+                user_id,
+                exc,
+            )
+            return False
 
         except Exception as exc:
             logger.exception(
@@ -1324,72 +1273,143 @@ def send_notification(
             # Your order creation logic
             return {"order_id": 123, "status": "created"}
     """
-    
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
-            # Execute the original function
+            # --------------------------------------------------
+            # 1. Execute the original endpoint/function
+            # --------------------------------------------------
+            logger.info("🔔 send_notification decorator triggered")
+            logger.info(f"🔔 Function: {func.__name__}")
             result = await func(*args, **kwargs)
-            
+
             try:
-                # Extract user_id from kwargs or args
+                # --------------------------------------------------
+                # 2. Get user_id
+                # --------------------------------------------------
                 user_id = kwargs.get(user_id_param)
-                
+
                 if not user_id:
-                    logger.warning(f"send_notification: {user_id_param} not found in function args")
+                    logger.warning(
+                        f"send_notification: "
+                        f"{user_id_param} not found"
+                    )
                     return result
-                
-                # Get db and redis from kwargs
+
+                # --------------------------------------------------
+                # 3. Get database session
+                # --------------------------------------------------
                 db = kwargs.get("db")
+
                 if not db:
-                    logger.warning("send_notification: db not found in function kwargs")
+                    logger.warning(
+                        "send_notification: db not found"
+                    )
                     return result
-                
+
+                # --------------------------------------------------
+                # 4. Get Redis client
+                # --------------------------------------------------
                 redis_client = await get_redis()
-                
-                # Extract entity_id if specified
+
+                # --------------------------------------------------
+                # 5. Get entity_id
+                # --------------------------------------------------
                 entity_id = None
+
                 if entity_id_param:
-                    # Try to get from result dict first, then from kwargs
-                    if isinstance(result, dict) and entity_id_param in result:
+                    if (
+                        isinstance(result, dict)
+                        and entity_id_param in result
+                    ):
                         entity_id = result[entity_id_param]
+
                     elif entity_id_param in kwargs:
                         entity_id = kwargs[entity_id_param]
-                
-                # Build notification text with template interpolation
-                notify_title = title
-                notify_message = message
-                
+
+                # --------------------------------------------------
+                # 6. Build notification text
+                # --------------------------------------------------
+                notify_title = title or "Notification"
+                notify_message = message or "Action completed"
+
                 if isinstance(result, dict):
                     if title:
                         notify_title = title.format(**result)
+
                     if message:
                         notify_message = message.format(**result)
-                
-                # Create and send notification
+
+                # --------------------------------------------------
+                # 7. Create in-app notification
+                # --------------------------------------------------
                 await NotificationService.create_notification(
                     db=db,
                     redis_client=redis_client,
                     data=NotificationCreate(
                         user_id=user_id,
-                        title=notify_title or "Notification",
-                        message=notify_message or "Action completed",
+                        title=notify_title,
+                        message=notify_message,
                         notification_type=notification_type,
                         entity_type=entity_type,
                         entity_id=entity_id,
-                        metadata={"auto_generated": True}
-                    )
+                        metadata={
+                            "auto_generated": True,
+                        },
+                    ),
                 )
-                
+
+                logger.info(
+                    f"✓ In-app notification created "
+                    f"for user_id={user_id}"
+                )
+
+                # --------------------------------------------------
+                # 8. Send Firebase FCM push notification
+                # --------------------------------------------------
+                try:
+                    logger.info(
+                        f"🔥 About to send FCM notification "
+                        f"to user_id={user_id}"
+                    )
+                    fcm_result = await NotificationService.send_push_notification(
+                        db=db,
+                        user_id=user_id,
+                        title=notify_title,
+                        body=notify_message,
+                        data={
+                            "notification_type": notification_type.value,
+                            "entity_type": entity_type or "",
+                            "entity_id": str(entity_id or ""),
+                        },
+                    )
+                    logger.info(f"🔥 FCM send result: {fcm_result}")
+                except Exception as exc:
+                    logger.exception(
+                        "FCM notification failed (non-blocking) "
+                        "for user_id=%s: %s",
+                        user_id,
+                        exc,
+                    )
+
             except Exception as exc:
-                logger.error(f"Decorator notification failed (non-blocking): {exc}")
-                # Don't fail the original function if notification fails
-            
+                # Notification failure must NOT break
+                # the original API response.
+                logger.exception(
+                    "Decorator notification failed "
+                    "(non-blocking): %s",
+                    exc,
+                )
+
             return result
-        
+
         return wrapper
-    
+
     return decorator
+<<<<<<< HEAD
 
 
 >>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
+=======
+>>>>>>> 7f158cd (Update notifications and in-app calling)
