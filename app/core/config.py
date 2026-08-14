@@ -26,12 +26,11 @@ class Settings(BaseSettings):
     SMTP_FROM: str
     EMAIL_USE_TLS: bool
 
-<<<<<<< HEAD
-=======
+
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
+
     FRONTEND_URL: str = "http://localhost:8000"
 
     model_config = SettingsConfigDict(

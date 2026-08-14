@@ -1407,9 +1407,3 @@ def send_notification(
         return wrapper
 
     return decorator
-<<<<<<< HEAD
-
-
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
-=======
->>>>>>> 7f158cd (Update notifications and in-app calling)
