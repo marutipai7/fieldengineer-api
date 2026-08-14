@@ -43,7 +43,10 @@ class CallSession(Base):
         index=True,
     )
 
+<<<<<<< HEAD
     # Calling room
+=======
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     room_id = Column(
         String(255),
         unique=True,
@@ -58,6 +61,16 @@ class CallSession(Base):
         nullable=False,
     )
 
+<<<<<<< HEAD
+=======
+    # User receiving the call
+    receiver_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     call_type = Column(
         Enum(CallType),
         default=CallType.VIDEO,
@@ -70,6 +83,7 @@ class CallSession(Base):
         nullable=False,
     )
 
+<<<<<<< HEAD
     appointment_id = Column(
         Integer,
         nullable=True,
@@ -80,6 +94,8 @@ class CallSession(Base):
         nullable=True,
     )
 
+=======
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
     notes = Column(
         Text,
         nullable=True,
@@ -121,10 +137,26 @@ class CallSession(Base):
         onupdate=datetime.utcnow,
     )
 
+<<<<<<< HEAD
     caller = relationship("User")
 
     participants = relationship(
         "CallParticipant",
+=======
+    caller = relationship(
+        "User",
+        foreign_keys=[caller_id],
+    )
+
+    receiver = relationship(
+        "User",
+        foreign_keys=[receiver_id],
+    )
+
+    participants = relationship(
+        "CallParticipant",
+        back_populates="call",
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
         cascade="all, delete-orphan",
     )
 
@@ -202,6 +234,13 @@ class CallParticipant(Base):
         default=datetime.utcnow,
     )
 
+<<<<<<< HEAD
     call = relationship("CallSession")
+=======
+    call = relationship(
+        "CallSession",
+        back_populates="participants",
+    )
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
     user = relationship("User")

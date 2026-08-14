@@ -31,6 +31,7 @@ def create_call(
     db: Session = Depends(get_db),
 ):
     call = service.create_call(
+<<<<<<< HEAD
         db=db,
         caller_id=current_user[0].id,
         call_type=CallType(data.call_type),
@@ -38,6 +39,14 @@ def create_call(
         appointment_reference=data.appointment_reference,
         notes=data.notes,
     )
+=======
+    db=db,
+    caller_id=current_user[0].id,
+    receiver_id=data.receiver_id,
+    call_type=CallType(data.call_type),
+    notes=data.notes,
+)
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
     return call
 
@@ -57,8 +66,11 @@ def create_group_call(
         caller_id=current_user[0].id,
         participant_ids=data.participant_ids,
         call_type=CallType(data.call_type),
+<<<<<<< HEAD
         appointment_id=data.appointment_id,
         appointment_reference=data.appointment_reference,
+=======
+>>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
         notes=data.notes,
     )
 
