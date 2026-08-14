@@ -1,50 +1,11 @@
 from datetime import datetime
-<<<<<<< HEAD
-from typing import Any
-=======
 from enum import Enum
 from typing import Optional
 from uuid import UUID
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-<<<<<<< HEAD
-class NotificationCreate(BaseModel):
-    user_id: int
-    title: str
-    message: str
-
-    notification_type: str
-
-    entity_type: str | None = None
-    entity_id: int | None = None
-
-    type: str = "info"
-
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class NotificationResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    user_id: int
-    title: str
-    message: str
-
-    notification_type: str
-
-    entity_type: str | None = None
-    entity_id: int | None = None
-
-    type: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-    is_read: bool
-    created_at: datetime | None = None
-=======
 class NotificationType(str, Enum):
     """Enum for notification types."""
 
@@ -130,4 +91,3 @@ class FCMTokenResponse(BaseModel):
 
     success: bool
     message: str
->>>>>>> 7425a69e89a67de1c0f662f4ee4c5927fff75ee6
