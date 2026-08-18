@@ -12,7 +12,7 @@ import shutil
 import os
 from fastapi import Request
 from typing import Optional
-
+from datetime import datetime, timezone
 
 
 from app.profile.schemas import VendorProfileSchema
@@ -1498,7 +1498,7 @@ async def invite_engineer(
     referral_token = secrets.token_urlsafe(32)
 
     # Set expiry to 24 hours from now
-    expires_at = datetime.now() + timedelta(days=1)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=1)
 
     # Create referral link
     referral_link = f"{settings.FRONTEND_URL}/profile/invite/engineer/{referral_token}"
@@ -1745,8 +1745,7 @@ async def accept_engineer_invitation(
         )
 
     # Check if expired
-    if datetime.now() > invitation.expires_at:
-        # Mark as expired in the database
+    if datetime.now(timezone.utc) > invitation.expires_at:        # Mark as expired in the database
         invitation.status = "expired"
         db.commit()
         raise HTTPException(
@@ -1816,7 +1815,7 @@ async def accept_engineer_invitation(
                 "vendor_profile_id": invitation.vendor_profile_id,
                 "status": invitation.status,
                 "is_used": invitation.is_used,
-                "used_at": datetime.now()
+                "used_at": datetime.now(timezone.utc)
             }
         }
 
@@ -1846,7 +1845,7 @@ async def get_invitation_details_by_token(
         )
 
     # Check expiry
-    is_expired = datetime.now() > invitation.expires_at
+    is_expired = datetime.now(timezone.utc) > invitation.expires_at
 
     if is_expired and invitation.status == "pending":
         invitation.status = "expired"
@@ -2897,7 +2896,8 @@ async def invite_engineer_legacy_redirect(
         )
 
     # Check if expired
-    if datetime.now() > invitation.expires_at:
+    is_expired = datetime.now(timezone.utc) > invitation.expires_at        
+    if is_expired:
         invitation.status = "expired"
         db.commit()
         raise HTTPException(
