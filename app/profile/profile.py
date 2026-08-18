@@ -98,55 +98,55 @@ def get_user_and_profile(
 
 
 
-# @router.get("/me")
-# async def get_profile(
-#     current_user_email: str = Depends(get_current_user_email),
-#     db: Session = Depends(get_db)
-# ):
-#     user, profile = get_user_and_profile(
-#         current_user_email,
-#         db
-#     )
+@router.get("/me")
+async def get_profile(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
-#     return {
-#         "email": user.email,
-#         "phone_number": user.phone_number,
-#         "role": user.role.value,
-#         "profile": {
-#             "full_name": profile.full_name if profile else None,
-#             "date_of_birth": profile.date_of_birth if profile else None,
-#             "gender": profile.gender if profile else None,
-#             "profile_image": profile.profile_image if profile else None
-#         }
-#     }
+    return {
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "role": user.role.value,
+        "profile": {
+            "full_name": profile.full_name if profile else None,
+            "date_of_birth": profile.date_of_birth if profile else None,
+            "gender": profile.gender if profile else None,
+            "profile_image": profile.profile_image if profile else None
+        }
+    }
 
-# @router.put("/update")
-# async def update_profile(
-#     payload: UserProfileSchema,
-#     current_user_email: str = Depends(get_current_user_email),
-#     db: Session = Depends(get_db)
-# ):
-#     user, profile = get_user_and_profile(
-#         current_user_email,
-#         db
-#     )
+@router.put("/update")
+async def update_profile(
+    payload: UserProfileSchema,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
-#     if not profile:
-#         profile = UserProfile(
-#             user_id=user.id
-#         )
-#         db.add(profile)
+    if not profile:
+        profile = UserProfile(
+            user_id=user.id
+        )
+        db.add(profile)
 
-#     profile.full_name = payload.full_name
-#     profile.date_of_birth = payload.date_of_birth
-#     profile.gender = payload.gender
-#     profile.profile_image = payload.profile_image
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
 
-#     db.commit()
+    db.commit()
 
-#     return {
-#         "message": "Profile updated successfully"
-#     }
+    return {
+        "message": "Profile updated successfully"
+    }
 
 
 

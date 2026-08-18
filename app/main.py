@@ -27,7 +27,7 @@ from app.notifications.routers import (
     router as notification_router,
     ws_router as notification_ws_router,
 )
-
+from app.fieldengineer.services import router as field_engineer_router
 import redis.asyncio as redis
 
 from app.profile.models import User
@@ -190,3 +190,4 @@ app.include_router(chat_router)
 app.include_router(inappcall_router)
 app.include_router(notification_router)
 app.include_router(notification_ws_router)
+app.include_router(field_engineer_router)

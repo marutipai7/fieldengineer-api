@@ -29,7 +29,7 @@ router = APIRouter(
     "/master/services",
     response_model=list[ServiceResponse]
 )
-def get_services(
+def get_master_services(
     db: Session = Depends(get_db)
 ):
     return (
@@ -199,20 +199,17 @@ def get_services(
         .filter(User.email == current_user_email)
         .first()
     )
-
     if not user:
         raise HTTPException(
             status_code=404,
             detail="User not found"
-        )
-
+        )  
     # Get field engineer profile
     profile = (
         db.query(UserProfile)
         .filter(UserProfile.user_id == user.id)
         .first()
     )
-
     if not profile:
         raise HTTPException(
             status_code=404,
@@ -241,7 +238,7 @@ def get_services(
         )
         .all()
     )
-
+    print("5. Services:", services)
     return [
         FieldEngineerServiceResponse(
             id=service.id,
