@@ -8,6 +8,9 @@ from app.profile.models import *
 from app.booking.models import *
 from app.help_support.models import *
 from app.payment_method.models import *
+from app.chat.models import *
+from app.inappcall.models import *
+from app.core.database import Base
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

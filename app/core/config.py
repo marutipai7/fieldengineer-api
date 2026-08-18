@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     SECRET_KEY: str
     ALGORITHM: str
@@ -24,6 +25,13 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str
     SMTP_FROM: str
     EMAIL_USE_TLS: bool
+
+
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+
+    FRONTEND_URL: str = "http://localhost:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

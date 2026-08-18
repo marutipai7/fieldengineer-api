@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
 from sqlalchemy import select
 from app.booking.models import SiteDetail
+from app.profile.models import UserProfile
 import random
 from app.booking.models import (
     Booking,
@@ -29,6 +30,12 @@ from app.booking.models import (
     BookingDocument
 )
 
+from app.booking.models import (
+    Service,
+    SubService,
+    FieldEngineerService,
+)
+
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
@@ -53,7 +60,8 @@ from app.booking.schemas import (
     ServiceResponse,
     SubServiceResponse,
     SiteTypeResponse,
-    ProjectTypeResponse
+    ProjectTypeResponse,
+    LeadResponse
 )
 
 from app.booking.models import (
@@ -405,4 +413,104 @@ async def cancel_booking(
 
     return {
         "message": "Booking cancelled successfully"
+    }
+
+# User Accept API
+
+@router.post("/{booking_id}/accept")
+async def user_accept_booking(
+    booking_id: int,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+
+    user = (
+        db.query(User)
+        .filter(User.email == current_user_email)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    print("USER ID:", user.id)
+
+    booking = (
+    db.query(Booking)
+    .filter(Booking.id == booking_id)
+    .first()
+)
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found for this user"
+        )
+
+    if booking.accepted_field_engineer_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No Field Engineer has been assigned to this booking"
+        )
+
+    booking.booking_status = BookingStatus.CONFIRMED
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking accepted successfully",
+        "booking_id": booking.id,
+        "booking_number": booking.booking_number,
+        "status": booking.booking_status.value
+    }
+
+# User Reject API
+
+@router.post("/{booking_id}/reject")
+async def user_reject_booking(
+    booking_id: int,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user = (
+        db.query(User)
+        .filter(User.email == current_user_email)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    booking = (
+        db.query(Booking)
+        .filter(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+        .first()
+    )
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    booking.booking_status = BookingStatus.CANCELLED
+
+    db.commit()
+    db.refresh(booking)
+
+    return {
+        "message": "Booking rejected successfully",
+        "booking_id": booking.id,
+        "booking_number": booking.booking_number,
+        "status": booking.booking_status.value
     }

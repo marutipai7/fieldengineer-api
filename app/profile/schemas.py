@@ -14,20 +14,20 @@ class OTPAction(str, Enum):
 
 
 
-# class SignupSchema(BaseModel):
-#     email: EmailStr
-#     phone_number: str
-#     password: str
-#     role: UserRole
+class SignupSchema(BaseModel):
+    email: EmailStr
+    phone_number: str
+    password: str
+    role: UserRole
 
-    # company_name: Optional[str] = None
-    # owner_manager_name: Optional[str] = None
-    # vendor_type: Optional[str] = None
+    company_name: Optional[str] = None
+    owner_manager_name: Optional[str] = None
+    vendor_type: Optional[str] = None
 
 
-# class SigninSchema(BaseModel):
-#     email: EmailStr
-#     password: str
+class SigninSchema(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class RequestOTPSchema(BaseModel):

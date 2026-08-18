@@ -1,7 +1,10 @@
 import profile
 import uuid
+import secrets
+from datetime import datetime, timedelta, date, time
 from sqlalchemy.orm import Session
-from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request, Path
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, Request, Path, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from passlib.hash import pbkdf2_sha256
 from fastapi import Form, File, UploadFile
@@ -9,7 +12,6 @@ import shutil
 import os
 from fastapi import Request
 from typing import Optional
-from datetime import date, time
 
 
 
@@ -34,6 +36,7 @@ from app.profile.models import (
     VendorWorkforce,
     VendorBankDetail,
     VendorNotificationPreference,
+    EngineerInvitation,
 )
 
 from app.utils.auth_utils import (
@@ -49,6 +52,7 @@ from app.profile.schemas import (
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_email
+from app.core.config import settings
 
 from app.profile.models import (
     User,
@@ -94,55 +98,55 @@ def get_user_and_profile(
 
 
 
-# @router.get("/me")
-# async def get_profile(
-#     current_user_email: str = Depends(get_current_user_email),
-#     db: Session = Depends(get_db)
-# ):
-#     user, profile = get_user_and_profile(
-#         current_user_email,
-#         db
-#     )
+@router.get("/me")
+async def get_profile(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
-#     return {
-#         "email": user.email,
-#         "phone_number": user.phone_number,
-#         "role": user.role.value,
-#         "profile": {
-#             "full_name": profile.full_name if profile else None,
-#             "date_of_birth": profile.date_of_birth if profile else None,
-#             "gender": profile.gender if profile else None,
-#             "profile_image": profile.profile_image if profile else None
-#         }
-#     }
+    return {
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "role": user.role.value,
+        "profile": {
+            "full_name": profile.full_name if profile else None,
+            "date_of_birth": profile.date_of_birth if profile else None,
+            "gender": profile.gender if profile else None,
+            "profile_image": profile.profile_image if profile else None
+        }
+    }
 
-# @router.put("/update")
-# async def update_profile(
-#     payload: UserProfileSchema,
-#     current_user_email: str = Depends(get_current_user_email),
-#     db: Session = Depends(get_db)
-# ):
-#     user, profile = get_user_and_profile(
-#         current_user_email,
-#         db
-#     )
+@router.put("/update")
+async def update_profile(
+    payload: UserProfileSchema,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
-#     if not profile:
-#         profile = UserProfile(
-#             user_id=user.id
-#         )
-#         db.add(profile)
+    if not profile:
+        profile = UserProfile(
+            user_id=user.id
+        )
+        db.add(profile)
 
-#     profile.full_name = payload.full_name
-#     profile.date_of_birth = payload.date_of_birth
-#     profile.gender = payload.gender
-#     profile.profile_image = payload.profile_image
+    profile.full_name = payload.full_name
+    profile.date_of_birth = payload.date_of_birth
+    profile.gender = payload.gender
+    profile.profile_image = payload.profile_image
 
-#     db.commit()
+    db.commit()
 
-#     return {
-#         "message": "Profile updated successfully"
-#     }
+    return {
+        "message": "Profile updated successfully"
+    }
 
 
 
@@ -1454,7 +1458,412 @@ async def get_vendor_profile(
     }
 
 
+@router.post("/vendor/invite-engineer")
+async def invite_engineer(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate a new referral link for inviting an engineer.
+    Each time this endpoint is called, a new referral link is generated
+    with a 1-day expiry.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
 
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can invite engineers"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    # Generate unique referral token
+    referral_token = secrets.token_urlsafe(32)
+
+    # Set expiry to 24 hours from now
+    expires_at = datetime.now() + timedelta(days=1)
+
+    # Create referral link
+    referral_link = f"{settings.FRONTEND_URL}/profile/invite/engineer/{referral_token}"
+
+    # Create new invitation record
+    invitation = EngineerInvitation(
+        vendor_profile_id=profile.id,
+        referral_token=referral_token,
+        referral_link=referral_link,
+        expires_at=expires_at,
+        status="pending"
+    )
+
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    return {
+        "success": True,
+        "message": "Engineer invitation generated successfully",
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "referral_token": invitation.referral_token,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "status": invitation.status
+        }
+    }
+
+
+@router.get("/vendor/invitations")
+async def get_vendor_invitations(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all invitations sent by the current vendor.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can access invitations"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitations = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().all()
+
+    return {
+        "success": True,
+        "data": [
+            {
+                "invitation_id": inv.id,
+                "referral_link": inv.referral_link,
+                "created_at": inv.created_at,
+                "expires_at": inv.expires_at,
+                "is_used": inv.is_used,
+                "status": inv.status
+            }
+            for inv in invitations
+        ]
+    }
+
+
+@router.get("/vendor/invitation/{invitation_id}")
+async def get_invitation_details(
+    invitation_id: int = Path(...),
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details of a specific invitation.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can access invitation details"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.id == invitation_id,
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invitation not found"
+        )
+
+    return {
+        "success": True,
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "is_used": invitation.is_used,
+            "status": invitation.status
+        }
+    }
+
+
+@router.delete("/vendor/invitation/{invitation_id}")
+async def delete_invitation(
+    invitation_id: int = Path(...),
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete/revoke an invitation link.
+    """
+    user = db.execute(
+        select(User).where(User.email == current_user_email)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    if user.role != UserRole.VENDOR:
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vendor can revoke invitations"
+        )
+
+    profile = db.execute(
+        select(VendorProfile).where(VendorProfile.user_id == user.id)
+    ).scalars().first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Vendor profile not found"
+        )
+
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.id == invitation_id,
+            EngineerInvitation.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invitation not found"
+        )
+
+    db.delete(invitation)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Invitation deleted successfully"
+    }
+
+
+@router.api_route("/invite/engineer/{token}", methods=["GET", "POST"])
+async def accept_engineer_invitation(
+    request: Request,
+    token: str = Path(...),
+    email: Optional[str] = Form(None),
+    phone_number: Optional[str] = Form(None),
+    current_user_email: Optional[str] = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle engineer invitation via referral link.
+    
+    For GET requests: Validates the token and redirects the engineer to the 
+    frontend registration page with the token as a query parameter.
+    
+    For POST requests: Consumes the referral link (marks it as used when an 
+    engineer completes registration). The current_user_email is used to 
+    identify the engineer who is consuming the invitation.
+    
+    If the token is invalid or expired, an error response is returned.
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check if already used
+    if invitation.is_used:
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has already been used"
+        )
+
+    # Check if expired
+    if datetime.now() > invitation.expires_at:
+        # Mark as expired in the database
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has expired. Please contact the vendor for a new invitation."
+        )
+
+    # Check status
+    if invitation.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This referral link is no longer valid (status: {invitation.status})"
+        )
+
+    # Handle based on request method
+    if request.method == "GET":
+        # Redirect to frontend registration page with token
+        redirect_url = f"{settings.FRONTEND_URL}/register?referral_token={token}"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    
+    elif request.method == "POST":
+        # Consume the invitation (engineer registration completed)
+        if not current_user_email:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required to consume invitation"
+            )
+        
+        # Get the user who just registered
+        user = db.execute(
+            select(User).where(User.email == current_user_email)
+        ).scalars().first()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
+
+        # Check if the user is an engineer
+        if user.role != UserRole.FIELD_ENGINEER:
+            raise HTTPException(
+                status_code=403,
+                detail="Only field engineers can consume this invitation"
+            )
+
+        # Mark invitation as used
+        invitation.is_used = True
+        invitation.used_by_user_id = user.id
+        invitation.status = "accepted"
+        
+        # Update contact info if provided
+        if email:
+            invitation.email = email
+        if phone_number:
+            invitation.phone_number = phone_number
+
+        db.commit()
+        db.refresh(invitation)
+
+        return {
+            "success": True,
+            "message": "Referral link successfully consumed",
+            "data": {
+                "invitation_id": invitation.id,
+                "referral_link": invitation.referral_link,
+                "vendor_profile_id": invitation.vendor_profile_id,
+                "status": invitation.status,
+                "is_used": invitation.is_used,
+                "used_at": datetime.now()
+            }
+        }
+
+
+
+
+
+
+@router.get("/invite/engineer/{token}/details")
+async def get_invitation_details_by_token(
+    token: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Get details of an invitation by token (for frontend validation before redirect).
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check expiry
+    is_expired = datetime.now() > invitation.expires_at
+
+    if is_expired and invitation.status == "pending":
+        invitation.status = "expired"
+        db.commit()
+
+    return {
+        "success": True,
+        "data": {
+            "invitation_id": invitation.id,
+            "referral_link": invitation.referral_link,
+            "is_used": invitation.is_used,
+            "status": invitation.status,
+            "created_at": invitation.created_at,
+            "expires_at": invitation.expires_at,
+            "is_expired": is_expired
+        }
+    }
 
 
 @router.put("/vendor/profile")
@@ -1775,27 +2184,32 @@ async def complete_customer_profile(
             )
 
         return path
-
+    
     if step == 1:
+
         if not full_name:
-            raise HTTPException(400, "Full name is required.")
-
-        if not date_of_birth:
-            raise HTTPException(400, "Date of birth is required.")
-
-        if not gender:
-            raise HTTPException(400, "Gender is required.")
+            raise HTTPException(
+                status_code=400,
+                detail="Full name is required."
+            )
 
         if not phone_number:
-            raise HTTPException(400, "Phone number is required.")
+            raise HTTPException(
+                status_code=400,
+                detail="Phone number is required."
+            )
 
-        # Never allow changing the registered email
-
+        # Email cannot be changed
         if email and email != user.email:
             raise HTTPException(
                 status_code=400,
                 detail="Registered email cannot be changed."
             )
+
+        profile.full_name = full_name
+
+        # Update phone number in User table
+        user.phone_number = phone_number
 
         profile_image_path = save_file(profile_image)
 
@@ -1812,6 +2226,18 @@ async def complete_customer_profile(
 
     if step == 2:
 
+        if not identity_type:
+            raise HTTPException(
+                status_code=400,
+                detail="Identity type is required."
+            )
+
+        if not front_image:
+            raise HTTPException(
+                status_code=400,
+                detail="Front identity image is required."
+            )
+
         identity = db.execute(
             select(CustomerIdentity).where(
                 CustomerIdentity.user_profile_id == profile.id
@@ -1824,21 +2250,23 @@ async def complete_customer_profile(
             )
             db.add(identity)
 
-        if identity_type is not None:
-            identity.identity_type = identity_type
+        # Save selected ID type
+        identity.identity_type = identity_type
 
-        if identity_number is not None:
-            identity.identity_number = identity_number
-
+        # Save front image
         front_path = save_file(front_image)
-
         if front_path:
             identity.front_image = front_path
 
-        back_path = save_file(back_image)
+        # Back image is optional
+        if back_image:
+            back_path = save_file(back_image)
+            if back_path:
+                identity.back_image = back_path
 
-        if back_path:
-            identity.back_image = back_path
+        # Temporary until OCR is integrated
+        if identity_number:
+            identity.identity_number = identity_number
 
         db.commit()
 
@@ -1850,98 +2278,158 @@ async def complete_customer_profile(
 
     if step == 3:
 
-        business = db.execute(
-            select(CustomerBusiness).where(
-                CustomerBusiness.user_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        if not business:
-            business = CustomerBusiness(
-                user_profile_id=profile.id
-            )
-            db.add(business)
-
-        if company_name is not None:
-            business.company_name = company_name
-
-        if business_type is not None:
-            business.business_type = business_type
-
-        if industry is not None:
-            business.industry = industry
-
-        if website is not None:
-            business.website = website
-
-        if office_address is not None:
-            business.office_address = office_address
-
-        if city is not None:
-            business.city = city
-
-        if state is not None:
-            business.state = state
-
-        if pincode is not None:
-            business.pincode = pincode
-
-        if gst_number is not None:
-            business.gst_number = gst_number
-
-        if tax_number is not None:
-            business.tax_number = tax_number
-
-        if authorized_person_name is not None:
-            business.authorized_person_name = authorized_person_name
-
-        if designation is not None:
-            business.designation = designation
-
-        if work_email is not None:
-            business.work_email = work_email
-
-        if work_phone is not None:
-            business.work_phone = work_phone
-
-        db.commit()
-
-        return {
-            "success": True,
-            "step": 3,
-            "message": "Step 3 completed successfully."
-        }
+        if not company_name: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Company name is required." 
+            ) 
+    
+        if not business_type: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Business type is required." 
+            ) 
+    
+        if not industry: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Industry is required." 
+            ) 
+    
+        if not office_address: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Office address is required." 
+            ) 
+    
+        if not city: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="City is required." 
+            ) 
+    
+        if not state: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="State is required." 
+            ) 
+    
+        if not pincode: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Pincode is required." 
+            ) 
+    
+        if not authorized_person_name: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Authorized person name is required." 
+            ) 
+    
+        if not designation: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Designation is required." 
+            ) 
+    
+        if not work_email: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Work email is required." 
+            ) 
+    
+        if not work_phone: 
+            raise HTTPException( 
+                status_code=400, 
+                detail="Work phone is required." 
+            ) 
+    
+        business = db.execute( 
+            select(CustomerBusiness).where( 
+                CustomerBusiness.user_profile_id == profile.id 
+            ) 
+        ).scalars().first() 
+    
+        if not business: 
+            business = CustomerBusiness( 
+                user_profile_id=profile.id 
+            ) 
+            db.add(business) 
+    
+        business.company_name = company_name 
+        business.business_type = business_type 
+        business.industry = industry 
+        business.website = website          # Optional 
+        business.office_address = office_address 
+        business.city = city 
+        business.state = state 
+        business.pincode = pincode 
+        business.gst_number = gst_number    # Optional 
+        business.tax_number = tax_number    # Optional 
+        business.authorized_person_name = authorized_person_name 
+        business.designation = designation 
+        business.work_email = work_email 
+        business.work_phone = work_phone 
+    
+        db.commit() 
+    
+        return { 
+            "success": True, 
+            "step": 3, 
+            "message": "Step 3 completed successfully." 
+        } 
 
     if step == 4:
 
         documents = db.execute(
             select(CustomerDocument).where(
                 CustomerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
+                )
+                ).scalars().first()
 
         if not documents:
             documents = CustomerDocument(
                 user_profile_id=profile.id
-            )
+                )
             db.add(documents)
 
+       # Mandatory documents
+
+        if not gst_certificate:
+            raise HTTPException(
+                status_code=400,
+                detail="GST Certificate is required."
+            )
+
+        if not tax_identification_card:
+            raise HTTPException(
+                status_code=400,
+                detail="Tax Identification Card is required."
+            )
+
+        if not company_registration_certificate:
+            raise HTTPException(
+                status_code=400,
+                detail="Company Registration Certificate is required."
+            )
+
+        # Save files
+
         gst_path = save_file(gst_certificate)
-        if gst_path:
-            documents.gst_certificate = gst_path
+        documents.gst_certificate = gst_path
 
         tax_path = save_file(tax_identification_card)
-        if tax_path:
-            documents.tax_identification_card = tax_path
+        documents.tax_identification_card = tax_path
 
         company_path = save_file(company_registration_certificate)
-        if company_path:
-            documents.company_registration_certificate = company_path
+        documents.company_registration_certificate = company_path
 
+        # Optional
         moa_path = save_file(moa_aoa)
         if moa_path:
             documents.moa_aoa = moa_path
 
+        # Optional
         bank_path = save_file(bank_account_proof)
         if bank_path:
             documents.bank_account_proof = bank_path
@@ -1952,9 +2440,42 @@ async def complete_customer_profile(
             "success": True,
             "step": 4,
             "message": "Step 4 completed successfully."
-        }
+            }
 
     if step == 5:
+        if not tax_identification_card:
+            raise HTTPException(
+            status_code=400,
+            detail="Tax Identification Card is required."
+        )
+
+        documents = db.execute(
+            select(CustomerDocument).where(
+            CustomerDocument.user_profile_id == profile.id
+                    )
+    ).scalars().first()
+
+        if not documents:
+            documents = CustomerDocument(
+            user_profile_id=profile.id
+        )
+        db.add(documents)
+
+        if not tax_identification_card:
+            raise HTTPException(
+                status_code=400,
+                detail="Tax Identification Card is required."
+            )
+
+        tax_path = save_file(tax_identification_card)
+        documents.tax_identification_card = tax_path
+
+        bank_path = save_file(bank_account_proof)
+
+        if bank_path:
+            documents.bank_account_proof = bank_path
+
+        # Final validation before profile completion
 
         identity = db.execute(
             select(CustomerIdentity).where(
@@ -1968,15 +2489,7 @@ async def complete_customer_profile(
             )
         ).scalars().first()
 
-        documents = db.execute(
-            select(CustomerDocument).where(
-                CustomerDocument.user_profile_id == profile.id
-            )
-        ).scalars().first()
-
-        # Optional validations
-
-        if not profile.full_name:
+        if not profile:
             raise HTTPException(
                 status_code=400,
                 detail="Step 1 is incomplete."
@@ -1994,24 +2507,17 @@ async def complete_customer_profile(
                 detail="Step 3 is incomplete."
             )
 
-        if not documents:
-            raise HTTPException(
-                status_code=400,
-                detail="Step 4 is incomplete."
-            )
+    db.commit()
+    db.refresh(profile)
 
-        db.commit()
-
-        db.refresh(profile)
-
-        return {
-            "success": True,
-            "step": 5,
-            "message": "Customer profile completed successfully.",
-            "profile_id": profile.id,
-            "email": user.email,
-            "phone_number": user.phone_number
-        }
+    return {
+        "success": True,
+        "step": 5,
+        "message": "Customer profile completed successfully.",
+        "profile_id": profile.id,
+        "email": user.email,
+        "phone_number": user.phone_number
+    }
     
 # Get Customer Profile
 
@@ -2063,8 +2569,6 @@ async def get_customer_profile(
 
         "profile": {
             "full_name": profile.full_name,
-            "date_of_birth": profile.date_of_birth,
-            "gender": profile.gender,
             "profile_image": profile.profile_image
         },
 
@@ -2090,6 +2594,7 @@ async def get_customer_profile(
             "authorized_person_name": business.authorized_person_name if business else None,
             "designation": business.designation if business else None,
             "work_email": business.work_email if business else None,
+            "work_phone": business.work_phone if business else None,
         },
 
         "documents": {
@@ -2346,3 +2851,92 @@ async def update_customer_profile(
         "email": user.email,
         "profile_id": profile.id
     }
+
+
+# ---------------------------------------------------------------
+# Backward-compatible router for legacy referral links
+# (older links were generated WITHOUT the /profile prefix).
+# Redirects /invite/engineer/{token} -> /profile/invite/engineer/{token}
+# ---------------------------------------------------------------
+invite_redirect_router = APIRouter(
+    tags=["Engineer Invitation"]
+)
+
+
+@invite_redirect_router.api_route("/invite/engineer/{token}", methods=["GET", "POST"])
+async def invite_engineer_legacy_redirect(
+    request: Request,
+    token: str = Path(...),
+    current_user_email: Optional[str] = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    """
+    Handle referral link clicks - supports both new users and existing users.
+    
+    1. If the user is NOT logged in (new user):
+       - Validates the referral token
+       - Redirects to the frontend registration page with the token
+       
+    2. If the user IS logged in (existing user):
+       - Validates the referral token
+       - Redirects to the dashboard/profile page where their details are shown
+       - The token can be consumed if the user is a Field Engineer
+    
+    Supports both GET and POST methods for maximum compatibility.
+    """
+    invitation = db.execute(
+        select(EngineerInvitation).where(
+            EngineerInvitation.referral_token == token
+        )
+    ).scalars().first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid referral link"
+        )
+
+    # Check if expired
+    if datetime.now() > invitation.expires_at:
+        invitation.status = "expired"
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="This referral link has expired. Please contact the vendor for a new invitation."
+        )
+
+    # Check status
+    if invitation.status not in ["pending", "accepted"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This referral link is no longer valid (status: {invitation.status})"
+        )
+
+    # If user is already authenticated
+    if current_user_email:
+        user = db.execute(
+            select(User).where(User.email == current_user_email)
+        ).scalars().first()
+
+        if user:
+            # Check if the user is a Field Engineer
+            if user.role == UserRole.FIELD_ENGINEER:
+                # If token is still pending and not used, consume it for the engineer
+                if not invitation.is_used and invitation.status == "pending":
+                    invitation.is_used = True
+                    invitation.used_by_user_id = user.id
+                    invitation.status = "accepted"
+                    db.commit()
+                    db.refresh(invitation)
+
+                # Redirect to the engineer's dashboard/profile where details are shown
+                redirect_url = f"{settings.FRONTEND_URL}/engineer/dashboard?referral_token={token}"
+                return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+            else:
+                # Non-engineer users are redirected to their respective dashboards
+                redirect_url = f"{settings.FRONTEND_URL}/dashboard?referral_token={token}"
+                return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+
+    # New user - redirect to registration page with referral token
+    redirect_url = f"{settings.FRONTEND_URL}/register?referral_token={token}"
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)

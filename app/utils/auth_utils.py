@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from fastapi import Header, Depends, status, HTTPException
 # from app.profile.models import User, UserProfile, VendorProfile, FieldEngineerProfile, TokenBlacklist
-from app.profile.models import User, UserProfile
+from app.profile.models import User, UserProfile, VendorProfile
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -98,27 +98,29 @@ async def get_current_user_object(
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # Check blacklist
-    blacklisted = await db.execute(
-        select(TokenBlacklist).where(TokenBlacklist.token == token)
-    )
-    if blacklisted.scalars().first():
-        raise HTTPException(status_code=401, detail="Token has been logged out")
+    #blacklisted = await db.execute(
+    #    select(TokenBlacklist).where(TokenBlacklist.token == token)
+    #)
+    #if blacklisted.scalars().first():
+    #    raise HTTPException(status_code=401, detail="Token has been logged out")
 
     # Load user
-    user = (await db.execute(select(User).where(User.email == email))).scalars().first()
+    user = (db.execute(select(User).where(User.email == email))).scalars().first()
     if not user:
         raise HTTPException(404, "User not found")
 
-    if user.user_type in ['user']:
-        profile_query = select(UserProfile).where(UserProfile.user_id == user.id)
-    elif user.user_type == 'field_engineer':
-        profile_query = select(FieldEngineerProfile).where(FieldEngineerProfile.user_id == user.id)
-    elif user.user_type == 'vendor':
-        profile_query = select(VendorProfile).where(VendorProfile.user_id == user.id)
+    if user.role in ['user', 'field_engineer']:
+        profile_query = select(UserProfile).where(
+            UserProfile.user_id == user.id
+        )
+    elif user.role == 'vendor':
+        profile_query = select(VendorProfile).where(
+            VendorProfile.user_id == user.id
+        )
     else:
         raise HTTPException(400, "Invalid user type")
 
-    profile = (await db.execute(profile_query)).scalars().first()
+    profile = (db.execute(profile_query)).scalars().first()
     if not profile:
         raise HTTPException(404, "User profile not found")
 

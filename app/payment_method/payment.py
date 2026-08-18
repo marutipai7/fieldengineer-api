@@ -3,9 +3,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.utils.auth_utils import get_current_user_email
-
+from app.utils.auth_utils import (
+    get_current_user_email,
+    get_current_user_object
+)
 from app.profile.models import User
+
+from .models import PaymentHistory
+from .schemas import PaymentHistoryCreate, PaymentHistoryResponse
 
 from app.payment_method.models import (
     UpiPayment,
@@ -28,6 +33,10 @@ from app.payment_method.schemas import (
     VerifyCardRequest
 )
 
+from app.payment_method.schemas import (
+    PaymentHistoryCreate,
+    PaymentHistoryResponse,
+)
 
 router = APIRouter(
     prefix="/payment",
@@ -474,3 +483,99 @@ async def delete_payment(
         "message": "Payment deleted successfully"
     }
 
+@router.post(
+    "/history",
+    response_model=PaymentHistoryResponse
+)
+def create_payment_history(
+    data: PaymentHistoryCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object)
+):
+
+    user, profile = current_user
+
+    payment = PaymentHistory(
+        user_id=user.id,
+
+    amount=data.amount,
+
+    status=data.status,
+
+    transaction_reference=data.transaction_reference,
+
+    upi_payment_id=data.upi_payment_id,
+
+    card_payment_id=data.card_payment_id,
+
+    net_banking_payment_id=data.net_banking_payment_id,
+    )
+
+    try:
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create payment history"
+        )
+
+    return payment
+
+
+@router.get(
+    "/history",
+    response_model=list[PaymentHistoryResponse]
+)
+def get_payment_history(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object)
+):
+    user, profile = current_user
+
+    stmt = (
+        select(PaymentHistory)
+        .where(PaymentHistory.user_id == user.id)
+        .order_by(PaymentHistory.created_at.desc())
+    )
+
+    result = db.execute(stmt)
+
+    history = result.scalars().all()
+
+    return history
+
+
+@router.get(
+    "/history/{history_id}",
+    response_model=PaymentHistoryResponse
+)
+def get_payment_history_by_id(
+    history_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object)
+):
+    user, profile = current_user
+
+    stmt = (
+        select(PaymentHistory)
+        .where(
+            PaymentHistory.id == history_id,
+            PaymentHistory.user_id == user.id
+        )
+    )
+
+    result = db.execute(stmt)
+
+    payment = result.scalar_one_or_none()
+
+    if not payment:
+        raise HTTPException(
+            status_code=404,
+            detail="Payment history not found"
+        )
+
+    return payment

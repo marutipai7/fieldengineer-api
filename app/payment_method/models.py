@@ -4,7 +4,8 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
-    ForeignKey
+    ForeignKey,
+    Numeric,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -125,3 +126,51 @@ class CardPayment(Base):
 
     # user = relationship("User", back_populates="card_payments")
     user = relationship("User")
+    
+class PaymentHistory(Base):
+    __tablename__ = "payment_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    upi_payment_id = Column(
+        Integer,
+        ForeignKey("upi_payments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    card_payment_id = Column(
+        Integer,
+        ForeignKey("card_payments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    net_banking_payment_id = Column(
+        Integer,
+        ForeignKey("net_banking_payments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    amount = Column(Numeric(10, 2), nullable=False)
+
+    status = Column(String(20), nullable=False)
+
+    transaction_reference = Column(String(100), unique=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    user = relationship("User")
+    upi_payment = relationship("UpiPayment")
+    card_payment = relationship("CardPayment")
+    net_banking_payment = relationship("NetBankingPayment")

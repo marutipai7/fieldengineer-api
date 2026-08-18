@@ -13,8 +13,8 @@ from app.profile.models import (
     UserRole
 )
 from app.profile.schemas import (
-    # SignupSchema,
-    # SigninSchema,
+    SignupSchema,
+    SigninSchema,
     RequestOTPSchema,
     VerifyOTPSchema,
 )
@@ -188,35 +188,33 @@ async def verify_otp(
     }
 
 
-# @router.post("/signup")
-# async def signup(
-#     payload: SignupSchema,
-#     db: Session = Depends(get_db)
-# ):
-#     # Check if email already exists
-#     result = db.execute(
-#         select(User).where(User.email == payload.email)
-#     )
+@router.post("/signup")
+async def signup(
+    payload: SignupSchema,
+    db: Session = Depends(get_db)
+):
+    #Check if email already exists
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
 
-#     existing_user = result.scalars().first()
+    if existing_user := result.scalars().first():
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
 
-#     if existing_user:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Email already registered"
-#         )
+    # # Create User
+    user = User(
+        email=payload.email,
+        password_hash=pbkdf2_sha256.hash(payload.password),
+        role=payload.role,
+        is_verified=False
+    )
 
-#     # Create User
-#     user = User(
-#         email=payload.email,
-#         password_hash=pbkdf2_sha256.hash(payload.password),
-#         role=payload.role,
-#         is_verified=False
-#     )
-
-#     db.add(user)
-#     db.commit()
-#     db.refresh(user)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
 #     # Create UserProfile for Customer & Field Engineer
 #     if payload.role in [UserRole.USER, UserRole.FIELD_ENGINEER]:
@@ -238,96 +236,87 @@ async def verify_otp(
 #         db.add(vendor_profile)
 #         db.commit()
 
-#     return {
-#         "message": "User registered successfully",
-#         "role": user.role.value
-#     }
+    return {
+        "message": "User registered successfully",
+        "role": user.role.value
+    }
 
 
-# # @router.post("/signin")
-# # async def signin(
-# #     payload: SigninSchema,
-# #     db: Session = Depends(get_db)
-# # ):
-# #     result = db.execute(
-# #         select(User).where(User.email == payload.email)
-# #     )
+@router.post("/signin")
+async def signin(
+    payload: SigninSchema,
+    db: Session = Depends(get_db)
+):
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
 
-# #     user = result.scalars().first()
+    user = result.scalars().first()
 
-# #     if not user:
-# #         raise HTTPException(
-# #             status_code=401,
-# #             detail="Invalid credentials"
-# #         )
+    if not user:
+        raise HTTPException(            status_code=401,
+            detail="Invalid credentials"
+        )
 
-# #     if not pbkdf2_sha256.verify(
-# #         payload.password,
-# #         user.password_hash
-# #     ):
-# #         raise HTTPException(
-# #             status_code=401,
-# #             detail="Invalid credentials"
-# #         )
+    if not pbkdf2_sha256.verify(
+        payload.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+        
 
-# #     return {
-# #         "message": "Credentials verified successfully"
-# #     }
-# @router.post("/signin")
-# async def signin(
-#     payload: SigninSchema,
-#     db: Session = Depends(get_db)
-# ):
-#     result = db.execute(
-#         select(User).where(User.email == payload.email)
-#     )
+    return {
+        "message": "Credentials verified successfully"
+    }
+@router.post("/signin")
+async def signin(
+    payload: SigninSchema,
+    db: Session = Depends(get_db)
+):
+    result = db.execute(
+        select(User).where(User.email == payload.email)
+    )
 
-#     user = result.scalars().first()
+    user = result.scalars().first()
 
-#     print("INPUT EMAIL =", payload.email)
-#     print("INPUT PASSWORD =", payload.password)
-#     print("USER FOUND =", user)
+    print("INPUT EMAIL =", payload.email)
+    print("INPUT PASSWORD =", payload.password)
+    print("USER FOUND =", user)
 
-#     if user:
-#         print("DB EMAIL =", user.email)
-#         print("DB HASH =", user.password_hash)
-#         print(
-#             "PASSWORD MATCH =",
-#             pbkdf2_sha256.verify(
-#                 payload.password,
-#                 user.password_hash
-#             )
-#         )
+    if user:
+        print("DB EMAIL =", user.email)
+        print("DB HASH =", user.password_hash)
+        print(
+            "PASSWORD MATCH =",
+        pbkdf2_sha256.verify(
+                payload.password,
+                user.password_hash
+            )
+        )
 
-#     if not user:
-#         raise HTTPException(
-#             status_code=401,
-#             detail="Invalid credentials"
-#         )
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
 
-#     if not pbkdf2_sha256.verify(
-#         payload.password,
-#         user.password_hash
-#     ):
-#         raise HTTPException(
-#             status_code=401,
-#             detail="Invalid credentials"
-#         )
+    if not pbkdf2_sha256.verify(
+        payload.password,
+        user.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+#        )
 
-#     # return {
-#     #     "message": "Credentials verified successfully",
-#     #      "role": user.role.value
-#     # }
-#     token = create_access_token(
-#         {"sub": user.email}
-#     )
-
-#     return {
-#        "message": "Credentials verified successfully",
-#         "role": user.role.value,
-#         "access_token": token,
-#         "token_type": "bearer"
-#     }
+    return{
+        "message": "Credentials verified successfully",
+        "role": user.role.value
+    }
 
 
 

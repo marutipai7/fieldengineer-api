@@ -3,6 +3,8 @@ import enum
 # from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.orm import relationship
+from sqlalchemy import UniqueConstraint
 
 from app.core.database import Base
 from sqlalchemy import (
@@ -12,7 +14,8 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Integer,
-    Float
+    Float,
+    Numeric
 )
 
 
@@ -39,6 +42,12 @@ class Booking(Base):
     user_id = Column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE")
+    )
+
+    accepted_field_engineer_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="SET NULL"),
+        nullable=True
     )
 
     booking_number = Column(String(50), unique=True)
@@ -544,4 +553,62 @@ class BookingSchedule(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now()
+    )
+
+
+class FieldEngineerService(Base):
+    __tablename__ = "field_engineer_services"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "field_engineer_id",
+            "service_id",
+            "sub_service_id",
+            name="uq_field_engineer_service"
+        ),
+    )
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    field_engineer_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    service_id = Column(
+        Integer,
+        ForeignKey("services.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    sub_service_id = Column(
+        Integer,
+        ForeignKey("sub_services.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    price = Column(
+        Numeric(10, 2),
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    profile = relationship(
+        "UserProfile",
+        back_populates="services"
     )
