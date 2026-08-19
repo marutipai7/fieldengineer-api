@@ -2862,7 +2862,7 @@ invite_redirect_router = APIRouter(
 )
 
 
-@invite_redirect_router.api_route("/invite/engineer/{token}", methods=["GET", "POST"])
+@invite_redirect_router.api_route("/invite/engineer/{token}")
 async def invite_engineer_legacy_redirect(
     request: Request,
     token: str = Path(...),
