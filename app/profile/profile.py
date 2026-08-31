@@ -12,7 +12,7 @@ import shutil
 import os
 from fastapi import Request
 from typing import Optional
-
+from datetime import datetime, timezone
 
 
 from app.profile.schemas import VendorProfileSchema
@@ -1498,7 +1498,7 @@ async def invite_engineer(
     referral_token = secrets.token_urlsafe(32)
 
     # Set expiry to 24 hours from now
-    expires_at = datetime.now() + timedelta(days=1)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=1)
 
     # Create referral link
     referral_link = f"{settings.FRONTEND_URL}/profile/invite/engineer/{referral_token}"
@@ -1704,7 +1704,10 @@ async def delete_invitation(
     }
 
 
-@router.api_route("/invite/engineer/{token}", methods=["GET", "POST"])
+@router.api_route(
+    "/invite/engineer/{token}",
+    methods=["GET", "POST"]
+)
 async def accept_engineer_invitation(
     request: Request,
     token: str = Path(...),
@@ -1715,16 +1718,20 @@ async def accept_engineer_invitation(
 ):
     """
     Handle engineer invitation via referral link.
-    
-    For GET requests: Validates the token and redirects the engineer to the 
-    frontend registration page with the token as a query parameter.
-    
-    For POST requests: Consumes the referral link (marks it as used when an 
-    engineer completes registration). The current_user_email is used to 
-    identify the engineer who is consuming the invitation.
-    
-    If the token is invalid or expired, an error response is returned.
+
+    GET:
+        - Validates the referral token.
+        - Returns HTTP 200 with the frontend registration URL.
+
+    POST:
+        - Validates the referral token.
+        - Requires an authenticated Field Engineer.
+        - Consumes the referral link.
+        - Updates contact information if provided.
+        - Returns HTTP 200 with invitation details.
     """
+
+    # Find invitation
     invitation = db.execute(
         select(EngineerInvitation).where(
             EngineerInvitation.referral_token == token
@@ -1745,10 +1752,10 @@ async def accept_engineer_invitation(
         )
 
     # Check if expired
-    if datetime.now() > invitation.expires_at:
-        # Mark as expired in the database
+    if datetime.now(timezone.utc) > invitation.expires_at:
         invitation.status = "expired"
         db.commit()
+
         raise HTTPException(
             status_code=400,
             detail="This referral link has expired. Please contact the vendor for a new invitation."
@@ -1761,23 +1768,46 @@ async def accept_engineer_invitation(
             detail=f"This referral link is no longer valid (status: {invitation.status})"
         )
 
-    # Handle based on request method
+    # ============================================================
+    # GET REQUEST
+    # ============================================================
     if request.method == "GET":
-        # Redirect to frontend registration page with token
-        redirect_url = f"{settings.FRONTEND_URL}/register?referral_token={token}"
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-    
+
+        redirect_url = (
+            f"{settings.FRONTEND_URL}"
+            f"/register?referral_token={token}"
+        )
+
+        return {
+            "success": True,
+            "message": "Referral link is valid",
+            "data": {
+                "invitation_id": invitation.id,
+                "redirect_url": redirect_url,
+                "referral_token": token,
+                "vendor_profile_id": invitation.vendor_profile_id,
+                "status": invitation.status,
+                "is_used": invitation.is_used
+            }
+        }
+
+    # ============================================================
+    # POST REQUEST
+    # ============================================================
     elif request.method == "POST":
-        # Consume the invitation (engineer registration completed)
+
+        # Authentication required
         if not current_user_email:
             raise HTTPException(
                 status_code=401,
                 detail="Authentication required to consume invitation"
             )
-        
-        # Get the user who just registered
+
+        # Get the current user
         user = db.execute(
-            select(User).where(User.email == current_user_email)
+            select(User).where(
+                User.email == current_user_email
+            )
         ).scalars().first()
 
         if not user:
@@ -1797,10 +1827,11 @@ async def accept_engineer_invitation(
         invitation.is_used = True
         invitation.used_by_user_id = user.id
         invitation.status = "accepted"
-        
-        # Update contact info if provided
+
+        # Update contact information if provided
         if email:
             invitation.email = email
+
         if phone_number:
             invitation.phone_number = phone_number
 
@@ -1816,7 +1847,7 @@ async def accept_engineer_invitation(
                 "vendor_profile_id": invitation.vendor_profile_id,
                 "status": invitation.status,
                 "is_used": invitation.is_used,
-                "used_at": datetime.now()
+                "used_at": datetime.now(timezone.utc)
             }
         }
 
@@ -1846,7 +1877,7 @@ async def get_invitation_details_by_token(
         )
 
     # Check expiry
-    is_expired = datetime.now() > invitation.expires_at
+    is_expired = datetime.now(timezone.utc) > invitation.expires_at
 
     if is_expired and invitation.status == "pending":
         invitation.status = "expired"
@@ -2863,7 +2894,10 @@ invite_redirect_router = APIRouter(
 )
 
 
-@invite_redirect_router.api_route("/invite/engineer/{token}", methods=["GET", "POST"])
+@invite_redirect_router.api_route(
+    "/invite/engineer/{token}",
+    methods=["GET", "POST"],
+)
 async def invite_engineer_legacy_redirect(
     request: Request,
     token: str = Path(...),
@@ -2871,19 +2905,13 @@ async def invite_engineer_legacy_redirect(
     db: Session = Depends(get_db)
 ):
     """
-    Handle referral link clicks - supports both new users and existing users.
-    
-    1. If the user is NOT logged in (new user):
-       - Validates the referral token
-       - Redirects to the frontend registration page with the token
-       
-    2. If the user IS logged in (existing user):
-       - Validates the referral token
-       - Redirects to the dashboard/profile page where their details are shown
-       - The token can be consumed if the user is a Field Engineer
-    
-    Supports both GET and POST methods for maximum compatibility.
+    Handle referral link clicks for both GET and POST.
+
+    Returns HTTP 200 for both methods and provides the frontend
+    redirect URL in the response.
     """
+
+    # 1. Find invitation
     invitation = db.execute(
         select(EngineerInvitation).where(
             EngineerInvitation.referral_token == token
@@ -2896,47 +2924,86 @@ async def invite_engineer_legacy_redirect(
             detail="Invalid referral link"
         )
 
-    # Check if expired
-    if datetime.now() > invitation.expires_at:
+    # 2. Check expiration
+    if datetime.now(timezone.utc) > invitation.expires_at:
         invitation.status = "expired"
         db.commit()
+
         raise HTTPException(
             status_code=400,
             detail="This referral link has expired. Please contact the vendor for a new invitation."
         )
 
-    # Check status
+    # 3. Check invitation status
     if invitation.status not in ["pending", "accepted"]:
         raise HTTPException(
             status_code=400,
             detail=f"This referral link is no longer valid (status: {invitation.status})"
         )
 
-    # If user is already authenticated
+    # 4. Existing authenticated user
     if current_user_email:
+
         user = db.execute(
-            select(User).where(User.email == current_user_email)
+            select(User).where(
+                User.email == current_user_email
+            )
         ).scalars().first()
 
         if user:
-            # Check if the user is a Field Engineer
+
+            # Field Engineer
             if user.role == UserRole.FIELD_ENGINEER:
-                # If token is still pending and not used, consume it for the engineer
-                if not invitation.is_used and invitation.status == "pending":
+
+                # Consume invitation
+                if (
+                    not invitation.is_used
+                    and invitation.status == "pending"
+                ):
                     invitation.is_used = True
                     invitation.used_by_user_id = user.id
                     invitation.status = "accepted"
+
                     db.commit()
                     db.refresh(invitation)
 
-                # Redirect to the engineer's dashboard/profile where details are shown
-                redirect_url = f"{settings.FRONTEND_URL}/engineer/dashboard?referral_token={token}"
-                return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
-            else:
-                # Non-engineer users are redirected to their respective dashboards
-                redirect_url = f"{settings.FRONTEND_URL}/dashboard?referral_token={token}"
-                return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+                redirect_url = (
+                    f"{settings.FRONTEND_URL}"
+                    f"/engineer/dashboard"
+                    f"?referral_token={token}"
+                )
 
-    # New user - redirect to registration page with referral token
-    redirect_url = f"{settings.FRONTEND_URL}/register?referral_token={token}"
-    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+                return {
+                    "status": "success",
+                    "message": "Referral invitation processed successfully",
+                    "redirect_url": redirect_url,
+                    "referral_token": token
+                }
+
+            # Existing non-engineer user
+            redirect_url = (
+                f"{settings.FRONTEND_URL}"
+                f"/dashboard"
+                f"?referral_token={token}"
+            )
+
+            return {
+                "status": "success",
+                "message": "Referral invitation processed successfully",
+                "redirect_url": redirect_url,
+                "referral_token": token
+            }
+
+    # 5. New / unauthenticated user
+    redirect_url = (
+        f"{settings.FRONTEND_URL}"
+        f"/register"
+        f"?referral_token={token}"
+    )
+
+    return {
+        "status": "success",
+        "message": "Valid referral invitation",
+        "redirect_url": redirect_url,
+        "referral_token": token
+    }
