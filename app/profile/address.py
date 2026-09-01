@@ -22,12 +22,37 @@ router = APIRouter(
     prefix="/profile",
     tags=["Address"]
 )
+# def get_user_and_profile(
+#     email: str,
+#     db: Session
+# ):
+#     user = db.execute(
+#         select(User).where(User.email == email)
+#     ).scalars().first()
+
+#     if not user:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="User not found"
+#         )
+
+#     profile = db.execute(
+#         select(UserProfile).where(
+#             UserProfile.user_id == user.id
+#         )
+#     ).scalars().first()
+
+#     return user, profile
+
+
+
+
 def get_user_and_profile(
-    email: str,
+    mobile: str,
     db: Session
 ):
     user = db.execute(
-        select(User).where(User.email == email)
+        select(User).where(User.mobile_number == mobile)
     ).scalars().first()
 
     if not user:
@@ -43,6 +68,9 @@ def get_user_and_profile(
     ).scalars().first()
 
     return user, profile
+
+
+
 
 
 @router.post("/address")
