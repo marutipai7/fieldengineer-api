@@ -28,7 +28,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer,primary_key=True,autoincrement=True)
-    email = Column(String(255), unique=True, nullable=False)
+    mobile_number = Column(String(20), unique=True, nullable=False)
     phone_number = Column(String(20), unique=True)
     # password_hash = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=True)
@@ -41,7 +41,7 @@ class User(Base):
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-    fcm_device_token = relationship("FCMDeviceToken",back_populates="user",uselist=False,cascade="all, delete-orphan,")
+    #fcm_device_token = relationship("FCMDeviceToken",back_populates="user",uselist=False,cascade="all, delete-orphan,")
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
@@ -142,19 +142,38 @@ class UserAddress(Base):
 
     id = Column(Integer,primary_key=True,autoincrement=True)
     profile_id = Column(Integer,ForeignKey("user_profiles.id", ondelete="CASCADE"),nullable=False)
+    country_id = Column(Integer, ForeignKey("countries.id", ondelete="SET NULL"), nullable=True)
     address_type = Column(String(50))  # home, office, other
     name = Column(String(255))
     flat_no = Column(String(255))
     street = Column(String(255))
     city = Column(String(100))
     state = Column(String(100))
-    country = Column(String(100))
+    country = Column(String(100))  # Kept for backward compatibility
     postal_code = Column(String(20))
     latitude = Column(String(50))
     longitude = Column(String(50))
     is_default = Column(Boolean, default=False)
 
     profile = relationship("UserProfile",back_populates="addresses")
+    country_obj = relationship("Country", back_populates="addresses")
+
+
+class Country(Base):
+    __tablename__ = "countries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    code = Column(String(2), nullable=False, unique=True)  # ISO 3166-1 alpha-2 code
+    phone_code = Column(String(10), nullable=True)  # e.g., +1, +44, +91
+    region = Column(String(100), nullable=True)  # e.g., Asia, Europe, Americas
+    
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    
+    addresses = relationship("UserAddress", back_populates="country_obj")
 
 
 class Vendor(Base):

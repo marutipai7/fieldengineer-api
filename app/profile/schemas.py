@@ -15,7 +15,7 @@ class OTPAction(str, Enum):
 
 
 class SignupSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     phone_number: str
     password: str
     role: UserRole
@@ -26,17 +26,17 @@ class SignupSchema(BaseModel):
 
 
 class SigninSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     password: str
 
 
 class RequestOTPSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     role: UserRole
     action: OTPAction
 
 class VerifyOTPSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     otp: str
     action: OTPAction
 
@@ -267,3 +267,26 @@ FieldEngineerProfileSchema.model_rebuild()
 VendorProfileSchema.model_rebuild()
 
 
+class CountrySchema(BaseModel):
+    id: int
+    name: str
+    code: str
+    phone_code: Optional[str] = None
+    region: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CountryCreateSchema(BaseModel):
+    name: str
+    code: str
+    phone_code: Optional[str] = None
+    region: Optional[str] = None
+
+
+class CountryUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    phone_code: Optional[str] = None
+    region: Optional[str] = None

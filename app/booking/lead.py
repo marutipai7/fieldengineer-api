@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.profile.models import User, UserProfile
 from app.booking.models import FieldEngineerService
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 from app.booking.schemas import LeadListResponse
 from app.booking.models import BookingStatus
 
@@ -84,12 +84,12 @@ def _build_lead_response(
 )
 async def get_lead_list(
     db: Session = Depends(get_db),
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_mobile: str = Depends(get_current_user_mobile)
 ):
     # 1. Get logged-in user
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 
@@ -181,10 +181,10 @@ async def get_lead_list(
 async def get_lead_by_id(
     booking_id: int,
     db: Session = Depends(get_db),
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_mobile: str = Depends(get_current_user_mobile)
 ):
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -260,11 +260,11 @@ async def get_lead_by_id(
 async def accept_lead(
     booking_id: int,
     db: Session = Depends(get_db),
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_mobile: str = Depends(get_current_user_mobile)
 ):
     # 1. Find logged-in user
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -381,12 +381,12 @@ async def accept_lead(
 async def reject_lead(
     booking_id: int,
     db: Session = Depends(get_db),
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_mobile: str = Depends(get_current_user_mobile)
 ):
     user = (
         db.execute(
             select(User).where(
-                User.email == current_user_email
+                User.mobile_number == current_user_mobile
             )
         )
         .scalars()

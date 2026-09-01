@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 from app.core.database import get_db
 
 from app.profile.models import User, UserProfile
@@ -58,16 +58,16 @@ def get_sub_services(
 @router.post("/services")
 def save_services(
     services: list[FieldEngineerServiceCreate],
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db),
 ):
     print("\n========== SAVE SERVICES ==========")
-    print("AUTH EMAIL:", current_user_email)
+    print("AUTH MOBILE:", current_user_mobile)
 
     # 1. Get user
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 
@@ -190,13 +190,13 @@ def save_services(
     response_model=list[FieldEngineerServiceResponse]
 )
 def get_services(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db),
 ):
     # Get logged-in user
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
     if not user:
@@ -255,13 +255,13 @@ def get_services(
 def update_service(
     id: int,
     service: FieldEngineerServiceCreate,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db),
 ):
     # Get logged-in user
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 
@@ -333,13 +333,13 @@ def update_service(
 @router.delete("/services/{id}")
 def delete_service(
     id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db),
 ):
     # Get logged-in user
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 

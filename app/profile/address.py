@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 
 from app.core.database import get_db
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 
 from app.profile.models import (
     User,
@@ -48,15 +48,15 @@ def get_user_and_profile(
 @router.post("/address")
 async def create_address(
     payload: AddressCreateSchema,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
     print("========== ADDRESS DEBUG ==========")
-    print("Current Email:", current_user_email)
+    print("Current Mobile:", current_user_mobile)
     print("User ID:", user.id)
     print("Role:", user.role)
     print("Profile:", profile)
@@ -102,11 +102,11 @@ async def create_address(
 
 @router.get("/address")
 async def get_addresses(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -164,11 +164,11 @@ async def get_addresses(
 async def update_address(
     address_id: int,
     payload: AddressUpdateSchema,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -244,15 +244,15 @@ async def update_address(
 @router.delete("/address/{address_id}")
 async def delete_address(
     address_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
     print("========== DEBUG ==========")
-    print("Current User:", current_user_email)
+    print("Current User:", current_user_mobile)
     print("Profile ID:", profile.id)
     print("Address ID from URL:", address_id)
 
