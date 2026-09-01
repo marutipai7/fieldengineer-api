@@ -40,9 +40,9 @@ from app.booking.models import (
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_mobile
 
-from app.profile.models import User
+from app.profile.models import User, UserProfile
 from app.booking.models import Booking
-from app.booking.schemas import BookingCreate
+from app.booking.schemas import BookingCreate, OfferDetailsResponse
 
 
 router = APIRouter(
@@ -344,6 +344,114 @@ async def get_booking(
         "scheduled_time": booking.scheduled_time,
         "address": booking.address
     }
+@router.get(
+    "/{booking_id}/offer-details",
+    response_model=OfferDetailsResponse,
+)
+@router.get(
+    "/{booking_id}/offer_details",
+    response_model=OfferDetailsResponse,
+    include_in_schema=False,
+)
+@router.get(
+    "/{booking_id}/customer-offer-details",
+    response_model=OfferDetailsResponse,
+    include_in_schema=False,
+)
+async def get_customer_offer_details(
+    booking_id: int,
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user = db.execute(
+        select(User).where(
+            User.mobile_number == current_user_mobile
+        )
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    if booking.accepted_field_engineer_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Offer details not found"
+        )
+
+    accepted_profile = db.execute(
+        select(UserProfile).where(
+            UserProfile.id == booking.accepted_field_engineer_id
+        )
+    ).scalars().first()
+
+    if not accepted_profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Accepted field engineer profile not found"
+        )
+
+    accepted_user = db.execute(
+        select(User).where(
+            User.id == accepted_profile.user_id
+        )
+    ).scalars().first()
+
+    engineer_service = db.execute(
+        select(FieldEngineerService).where(
+            FieldEngineerService.field_engineer_id == accepted_profile.id,
+            FieldEngineerService.service_id == booking.service_id,
+            FieldEngineerService.sub_service_id == booking.sub_service_id,
+        )
+    ).scalars().first()
+
+    service = db.execute(
+        select(Service).where(
+            Service.id == booking.service_id
+        )
+    ).scalars().first()
+
+    sub_service = db.execute(
+        select(SubService).where(
+            SubService.id == booking.sub_service_id
+        )
+    ).scalars().first()
+
+    return OfferDetailsResponse(
+        booking_id=booking.id,
+        booking_number=booking.booking_number,
+        service_name=service.service_name if service else None,
+        sub_service_name=sub_service.sub_service_name if sub_service else None,
+        budget_min=booking.budget_min,
+        budget_max=booking.budget_max,
+        offer_price=float(engineer_service.price) if engineer_service and engineer_service.price is not None else None,
+        status=booking.booking_status.value if booking.booking_status else None,
+        accepted_field_engineer={
+            "id": accepted_profile.id,
+            "user_id": accepted_profile.user_id,
+            "full_name": accepted_profile.full_name,
+            "mobile_number": accepted_user.mobile_number if accepted_user else None,
+            "profile_image": accepted_profile.profile_image,
+            "work_preference": accepted_profile.work_preference,
+        }
+    )
+
+
 @router.put("/{booking_id}")
 async def update_booking(
     booking_id: int,
