@@ -9,7 +9,8 @@ from sqlalchemy import (
     Text,
     Integer,
     Numeric,
-    Time
+    Time,
+    UniqueConstraint
 )
 from datetime import datetime
 from sqlalchemy.sql import func
@@ -174,6 +175,28 @@ class Country(Base):
     )
     
     addresses = relationship("UserAddress", back_populates="country_obj")
+    states = relationship("State", back_populates="country", cascade="all, delete-orphan")
+
+
+class State(Base):
+    __tablename__ = "states"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    code = Column(String(10), nullable=False)  # State/province code
+    country_id = Column(Integer, ForeignKey("countries.id", ondelete="CASCADE"), nullable=False)
+    
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    
+    country = relationship("Country", back_populates="states")
+    
+    __table_args__ = (
+        UniqueConstraint('name', 'country_id', name='uq_state_name_country_id'),
+        UniqueConstraint('code', 'country_id', name='uq_state_code_country_id'),
+    )
 
 
 class Vendor(Base):

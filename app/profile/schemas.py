@@ -290,3 +290,25 @@ class CountryUpdateSchema(BaseModel):
     code: Optional[str] = None
     phone_code: Optional[str] = None
     region: Optional[str] = None
+
+
+class StateSchema(BaseModel):
+    id: int
+    name: str
+    code: str
+    country_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class StateCreateSchema(BaseModel):
+    name: str
+    code: str
+    country_id: int
+
+
+class StateUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    country_id: Optional[int] = None
