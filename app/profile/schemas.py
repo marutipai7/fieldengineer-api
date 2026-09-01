@@ -267,3 +267,26 @@ FieldEngineerProfileSchema.model_rebuild()
 VendorProfileSchema.model_rebuild()
 
 
+class CountrySchema(BaseModel):
+    id: int
+    name: str
+    code: str
+    phone_code: Optional[str] = None
+    region: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CountryCreateSchema(BaseModel):
+    name: str
+    code: str
+    phone_code: Optional[str] = None
+    region: Optional[str] = None
+
+
+class CountryUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    phone_code: Optional[str] = None
+    region: Optional[str] = None
