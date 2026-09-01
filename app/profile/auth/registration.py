@@ -25,7 +25,6 @@ from app.utils.otp_utils import (
     verify_otp_for_user,
     otp_store
 )
-from app.utils.mail_utils import send_email
 
 router = APIRouter(
     prefix="/auth",
@@ -42,7 +41,7 @@ async def request_otp(
     db: Session = Depends(get_db)
 ):
     user = db.execute(
-        select(User).where(User.email == payload.email)
+        select(User).where(User.mobile_number == payload.mobile_number)
     ).scalars().first()
 
     if payload.action == "signup":
@@ -50,7 +49,7 @@ async def request_otp(
         if user:
             raise HTTPException(
                 status_code=400,
-                detail="Email already registered"
+                detail="Mobile number already registered"
             )
 
     else:
@@ -67,16 +66,10 @@ async def request_otp(
                 detail="Invalid role"
             )
 
-    send_otp_to_user(payload.email)
-    otp_store[payload.email]["role"] = payload.role
-    otp_store[payload.email]["action"] = payload.action
-    otp = otp_store[payload.email]["otp"]
-
-    await send_email(
-        recipient=payload.email,
-        subject="OTP Verification",
-        body=f"Your OTP is {otp}"
-    )
+    send_otp_to_user(payload.mobile_number)
+    otp_store[payload.mobile_number]["role"] = payload.role
+    otp_store[payload.mobile_number]["action"] = payload.action
+    otp = otp_store[payload.mobile_number]["otp"]
 
     return {
         "message": "OTP sent successfully"
@@ -90,7 +83,7 @@ async def verify_otp(
     db: Session = Depends(get_db)
 ):
     is_valid = verify_otp_for_user(
-        payload.email,
+        payload.mobile_number,
         payload.otp
     )
 
@@ -100,7 +93,7 @@ async def verify_otp(
             detail="Invalid OTP"
         )
 
-    stored_data = otp_store.get(payload.email)
+    stored_data = otp_store.get(payload.mobile_number)
 
     if not stored_data:
         raise HTTPException(
@@ -113,7 +106,7 @@ async def verify_otp(
     verify_action = payload.action
 
     user = db.execute(
-        select(User).where(User.email == payload.email)
+        select(User).where(User.mobile_number == payload.mobile_number)
     ).scalars().first()
 
     # -----------------------------
@@ -124,7 +117,7 @@ async def verify_otp(
         if request_action == "signup":
 
             user = User(
-                email=payload.email,
+                mobile_number=payload.mobile_number,
                 password_hash="OTP_LOGIN",
                 role=role,
                 is_verified=True
@@ -176,7 +169,7 @@ async def verify_otp(
 
     token = create_access_token(
         {
-            "sub": user.email
+            "sub": user.mobile_number
         }
     )
 
@@ -195,18 +188,18 @@ async def signup(
 ):
     #Check if email already exists
     result = db.execute(
-        select(User).where(User.email == payload.email)
+        select(User).where(User.mobile_number == payload.mobile_number)
     )
 
     if existing_user := result.scalars().first():
         raise HTTPException(
             status_code=400,
-            detail="Email already registered"
+            detail="Mobile number already registered"
         )
 
     # # Create User
     user = User(
-        email=payload.email,
+        mobile_number=payload.mobile_number,
         password_hash=pbkdf2_sha256.hash(payload.password),
         role=payload.role,
         is_verified=False
@@ -248,7 +241,7 @@ async def signin(
     db: Session = Depends(get_db)
 ):
     result = db.execute(
-        select(User).where(User.email == payload.email)
+        select(User).where(User.mobile_number == payload.mobile_number)
     )
 
     user = result.scalars().first()
@@ -277,17 +270,17 @@ async def signin(
     db: Session = Depends(get_db)
 ):
     result = db.execute(
-        select(User).where(User.email == payload.email)
+        select(User).where(User.mobile_number == payload.mobile_number)
     )
 
     user = result.scalars().first()
 
-    print("INPUT EMAIL =", payload.email)
+    print("INPUT EMAIL =", payload.mobile_number)
     print("INPUT PASSWORD =", payload.password)
     print("USER FOUND =", user)
 
     if user:
-        print("DB EMAIL =", user.email)
+        print("DB EMAIL =", User.mobile_number)
         print("DB HASH =", user.password_hash)
         print(
             "PASSWORD MATCH =",

@@ -38,7 +38,7 @@ from app.booking.models import (
 
 
 from app.core.database import get_db
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 
 from app.profile.models import User
 from app.booking.models import Booking
@@ -127,12 +127,12 @@ async def get_project_types(
 @router.post("/")
 async def create_booking(
     payload: BookingCreate,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -266,12 +266,12 @@ async def create_booking(
 
 @router.get("/")
 async def get_bookings(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -306,12 +306,12 @@ async def get_bookings(
 @router.get("/{booking_id}")
 async def get_booking(
     booking_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -348,11 +348,11 @@ async def get_booking(
 async def update_booking(
     booking_id: int,
     payload: BookingCreate,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -387,11 +387,11 @@ async def update_booking(
 @router.put("/{booking_id}/cancel")
 async def cancel_booking(
     booking_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -420,13 +420,13 @@ async def cancel_booking(
 @router.post("/{booking_id}/accept")
 async def user_accept_booking(
     booking_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 
@@ -473,12 +473,12 @@ async def user_accept_booking(
 @router.post("/{booking_id}/reject")
 async def user_reject_booking(
     booking_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = (
         db.query(User)
-        .filter(User.email == current_user_email)
+        .filter(User.mobile_number == current_user_mobile)
         .first()
     )
 

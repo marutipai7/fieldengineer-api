@@ -93,14 +93,35 @@ class ChatHistory(Base):
 
     message = Column(
         Text,
-        nullable=False
+        nullable=True
     )
 
     message_type = Column(
         String,
-        nullable=False
+        nullable=False,
+        default="text"
     )
-    # text / image / file
+    # text / image / video / document
+
+    attachment_path = Column(
+        String,
+        nullable=True
+    )
+
+    attachment_name = Column(
+        String,
+        nullable=True
+    )
+
+    mime_type = Column(
+        String,
+        nullable=True
+    )
+
+    attachment_size = Column(
+        Integer,
+        nullable=True
+    )
 
     created_at = Column(
         DateTime,

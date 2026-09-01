@@ -28,7 +28,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer,primary_key=True,autoincrement=True)
-    email = Column(String(255), unique=True, nullable=False)
+    mobile_number = Column(String(20), unique=True, nullable=False)
     phone_number = Column(String(20), unique=True)
     # password_hash = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=True)
@@ -41,7 +41,7 @@ class User(Base):
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     vendor_profile = relationship("VendorProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
-    fcm_device_token = relationship("FCMDeviceToken",back_populates="user",uselist=False,cascade="all, delete-orphan,")
+    #fcm_device_token = relationship("FCMDeviceToken",back_populates="user",uselist=False,cascade="all, delete-orphan,")
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
