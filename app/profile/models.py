@@ -17,7 +17,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from app.core.database import Base
-
+from app.booking.models import FieldEngineerService
 
 class UserRole(str, enum.Enum):
     USER = "user"

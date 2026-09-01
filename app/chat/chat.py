@@ -1,5 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile,File,Form
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+    Form,
+)
+from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct
+
+from pathlib import Path
+import uuid
 
 from app.utils.auth_utils import get_current_user_object
 from app.core.database import get_db
@@ -7,18 +19,15 @@ from app.core.database import get_db
 from app.chat.models import (
     ChatSession,
     ChatParticipant,
-    ChatHistory
+    ChatHistory,
 )
 
 from app.chat.schemas import (
     CreateChatRequest,
     CreateChatResponse,
-    SendMessageRequest,
     ChatHistoryResponse,
-    ChatSessionHistoryResponse
 )
-from pathlib import Path
-import uuid
+
 
 router = APIRouter(
     prefix="/chat",
@@ -26,7 +35,10 @@ router = APIRouter(
 )
 
 
-# Create Chat Session
+# ============================================================
+# 1. CREATE / GET CHAT SESSION
+# ============================================================
+
 @router.post(
     "/session",
     response_model=CreateChatResponse
@@ -38,45 +50,119 @@ def create_chat(
 ):
     user, profile = current_user
 
+    current_user_id = user.id
+    other_user_id = request.other_user_id
+    print("================================")
+    print("CURRENT USER ID:", current_user_id)
+    print("OTHER USER ID:", other_user_id)
+    print("CURRENT USER:", user)
+    print("================================")
+    # --------------------------------------------------------
+    # Cannot chat with yourself
+    # --------------------------------------------------------
 
-    # Create chat session
+    if current_user_id == other_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot create a chat with yourself"
+        )
+
+    # --------------------------------------------------------
+    # Check whether other user exists
+    # --------------------------------------------------------
+
+    from app.profile.models import User
+
+    other_user = (
+        db.query(User)
+        .filter(User.id == other_user_id)
+        .first()
+    )
+
+    if not other_user:
+        raise HTTPException(
+            status_code=404,
+            detail="Other user not found"
+        )
+
+    # --------------------------------------------------------
+    # Find existing session between these TWO users
+    # --------------------------------------------------------
+
+    existing_session = (
+        db.query(ChatSession)
+        .join(
+            ChatParticipant,
+            ChatParticipant.chat_session_id == ChatSession.id
+        )
+        .filter(
+            ChatParticipant.user_id.in_([
+                current_user_id,
+                other_user_id
+            ])
+        )
+        .group_by(ChatSession.id)
+        .having(
+            func.count(
+                distinct(ChatParticipant.user_id)
+            ) == 2
+        )
+        .first()
+    )
+
+    # --------------------------------------------------------
+    # Existing conversation found
+    # --------------------------------------------------------
+
+    if existing_session:
+
+        return {
+            "chat_session_id": existing_session.id,
+            "other_user_id": other_user_id
+        }
+
+    # --------------------------------------------------------
+    # No existing conversation
+    # Create a NEW session
+    # --------------------------------------------------------
+
     chat = ChatSession()
 
     db.add(chat)
-    db.commit()
-    db.refresh(chat)
+    db.flush()
 
-    # Add current user as participant
+    # Current user
     creator_participant = ChatParticipant(
         chat_session_id=chat.id,
-        user_id=user.id
+        user_id=current_user_id
+    )
+
+    # Other user
+    other_participant = ChatParticipant(
+        chat_session_id=chat.id,
+        user_id=other_user_id
     )
 
     db.add(creator_participant)
-
-    # Add requested participants
-    for user_id in request.participant_ids:
-
-        if user_id == user.id:
-            continue
-
-        participant = ChatParticipant(
-            chat_session_id=chat.id,
-            user_id=user_id
-        )
-
-        db.add(participant)
+    db.add(other_participant)
 
     db.commit()
+    db.refresh(chat)
 
     return {
-        "chat_session_id": chat.id
+        "chat_session_id": chat.id,
+        "other_user_id": other_user_id
     }
 
 
+# ============================================================
+# 2. SEND MESSAGE
+# ============================================================
 
-# Send Message
-@router.post("/history")
+@router.post(
+    "/send",
+    response_model=ChatHistoryResponse
+)
 async def send_message(
     chat_session_id: int = Form(...),
     message: str | None = Form(None),
@@ -86,9 +172,10 @@ async def send_message(
     current_user=Depends(get_current_user_object),
 ):
     user, profile = current_user
-    # --------------------------------
-    # 1. Validate message/file
-    # --------------------------------
+
+    # --------------------------------------------------------
+    # Validate message/file
+    # --------------------------------------------------------
 
     if not message and not file:
         raise HTTPException(
@@ -96,9 +183,9 @@ async def send_message(
             detail="Message or file is required"
         )
 
-    # --------------------------------
-    # 2. Check chat session
-    # --------------------------------
+    # --------------------------------------------------------
+    # Check chat session
+    # --------------------------------------------------------
 
     chat = (
         db.query(ChatSession)
@@ -114,9 +201,9 @@ async def send_message(
             detail="Chat session not found"
         )
 
-    # --------------------------------
-    # 3. Check participant
-    # --------------------------------
+    # --------------------------------------------------------
+    # Check whether current user belongs to this session
+    # --------------------------------------------------------
 
     participant = (
         db.query(ChatParticipant)
@@ -133,9 +220,9 @@ async def send_message(
             detail="You are not a participant of this chat"
         )
 
-    # --------------------------------
-    # 4. Default values
-    # --------------------------------
+    # --------------------------------------------------------
+    # Default values
+    # --------------------------------------------------------
 
     message_type = "text"
 
@@ -146,15 +233,14 @@ async def send_message(
 
     saved_file_path = None
 
-    # --------------------------------
-    # 5. Handle attachment
-    # --------------------------------
+    # --------------------------------------------------------
+    # Handle attachment
+    # --------------------------------------------------------
 
     if file:
 
         mime_type = file.content_type or ""
 
-        # Determine message type
         if mime_type.startswith("image/"):
             message_type = "image"
 
@@ -173,9 +259,9 @@ async def send_message(
                 detail="Unsupported file type"
             )
 
-        # --------------------------------
+        # ----------------------------------------------------
         # Upload directory
-        # --------------------------------
+        # ----------------------------------------------------
 
         upload_dir = Path(
             f"uploads/chat/{chat_session_id}"
@@ -186,11 +272,13 @@ async def send_message(
             exist_ok=True
         )
 
-        # --------------------------------
+        # ----------------------------------------------------
         # Generate unique filename
-        # --------------------------------
+        # ----------------------------------------------------
 
-        original_filename = file.filename or "attachment"
+        original_filename = (
+            file.filename or "attachment"
+        )
 
         extension = Path(
             original_filename
@@ -204,32 +292,37 @@ async def send_message(
             upload_dir / filename
         )
 
-        # --------------------------------
+        # ----------------------------------------------------
         # Save file
-        # --------------------------------
+        # ----------------------------------------------------
 
         file_content = await file.read()
 
-        with open(saved_file_path, "wb") as buffer:
+        with open(
+            saved_file_path,
+            "wb"
+        ) as buffer:
             buffer.write(file_content)
 
-        # --------------------------------
+        # ----------------------------------------------------
         # File information
-        # --------------------------------
+        # ----------------------------------------------------
 
         attachment_path = str(
             saved_file_path
         )
 
-        attachment_name = original_filename
+        attachment_name = (
+            original_filename
+        )
 
         attachment_size = (
             saved_file_path.stat().st_size
         )
 
-    # --------------------------------
-    # 6. Save chat message
-    # --------------------------------
+    # --------------------------------------------------------
+    # Save message
+    # --------------------------------------------------------
 
     chat_message = ChatHistory(
         chat_session_id=chat_session_id,
@@ -249,6 +342,9 @@ async def send_message(
 
         db.add(chat_message)
 
+        # Update session timestamp
+        chat.updated_at = datetime.utcnow()
+
         db.commit()
 
         db.refresh(chat_message)
@@ -257,83 +353,87 @@ async def send_message(
 
         db.rollback()
 
-        # Remove uploaded file if DB insert fails
         if saved_file_path and saved_file_path.exists():
             saved_file_path.unlink()
 
+        print("CHAT MESSAGE SAVE ERROR:", repr(e))
+
         raise HTTPException(
-            status_code=500, detail="Failed to save chat message"
-        ) from e
+            status_code=500,
+            detail=str(e)
+    )from e
 
     return chat_message
 
+
+# ============================================================
+# 4. GET SINGLE CHAT HISTORY
+# ============================================================
+
 @router.get(
-    "/history",
-    response_model=list[ChatSessionHistoryResponse]
+    "/history/{user_id}",
+    response_model=list[ChatHistoryResponse]
 )
-def get_all_chat_history(
+def get_chat_history(
+    user_id: int,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_object)
 ):
     user, profile = current_user
 
-    # Get all chat sessions where current user is a participant
-    sessions = (
+    current_user_id = user.id
+    other_user_id = user_id
+
+    # Cannot chat with yourself
+    if current_user_id == other_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot get chat history with yourself"
+        )
+
+    # --------------------------------------------------------
+    # Find the session between current user and other user
+    # --------------------------------------------------------
+
+    chat_session = (
         db.query(ChatSession)
         .join(
             ChatParticipant,
             ChatParticipant.chat_session_id == ChatSession.id
         )
         .filter(
-            ChatParticipant.user_id == user.id
+            ChatParticipant.user_id.in_([
+                current_user_id,
+                other_user_id
+            ])
         )
-        .order_by(ChatSession.created_at.desc())
-        .all()
+        .group_by(ChatSession.id)
+        .having(
+            func.count(
+                distinct(ChatParticipant.user_id)
+            ) == 2
+        )
+        .first()
     )
 
-    result = []
+    # --------------------------------------------------------
+    # No existing conversation
+    # --------------------------------------------------------
 
-    for session in sessions:
+    if not chat_session:
+        return []
 
-        messages = (
-            db.query(ChatHistory)
-            .filter(
-                ChatHistory.chat_session_id == session.id
-            )
-            .order_by(ChatHistory.created_at)
-            .all()
-        )
+    # --------------------------------------------------------
+    # Get messages
+    # --------------------------------------------------------
 
-        result.append(
-            ChatSessionHistoryResponse(
-                chat_session_id=session.id,
-                created_at=session.created_at,
-                messages=messages
-            )
-        )
-
-    return result
-
-# Get Chat History
-@router.get(
-    "/history/{chat_session_id}",
-    response_model=list[ChatHistoryResponse]
+    return (
+    db.query(ChatHistory)
+    .filter(
+        ChatHistory.chat_session_id == chat_session.id
+    )
+    .order_by(
+        ChatHistory.created_at.asc()
+    )
+    .all()
 )
-def get_chat_history(
-    chat_session_id: int,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_object)
-):
-    user, profile = current_user
-
-    messages = (
-        db.query(ChatHistory)
-        .filter(
-            ChatHistory.chat_session_id == chat_session_id
-        )
-        .order_by(ChatHistory.created_at)
-        .all()
-    )
-
-
-    return messages

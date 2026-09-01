@@ -143,8 +143,14 @@ async def get_current_user_object(
             algorithms=[settings.ALGORITHM]
         )
 
+        print("================================")
+        print("JWT PAYLOAD:", payload)
+
         # Get mobile number from JWT
         mobile_number = payload.get("sub")
+
+        print("JWT MOBILE:", mobile_number)
+        print("================================")
 
         if not mobile_number:
             raise HTTPException(
