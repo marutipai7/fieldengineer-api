@@ -14,22 +14,6 @@ class OTPAction(str, Enum):
 
 
 
-class SignupSchema(BaseModel):
-    mobile_number: str
-    phone_number: str
-    password: str
-    role: UserRole
-
-    company_name: Optional[str] = None
-    owner_manager_name: Optional[str] = None
-    vendor_type: Optional[str] = None
-
-
-class SigninSchema(BaseModel):
-    mobile_number: str
-    password: str
-
-
 class RequestOTPSchema(BaseModel):
     mobile_number: str
     role: UserRole

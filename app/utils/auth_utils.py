@@ -122,11 +122,11 @@ async def get_current_user_mobile(
                 detail="Invalid token"
             )
 
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
-        )
+        )from e
 
     return mobile_number
 
@@ -143,14 +143,8 @@ async def get_current_user_object(
             algorithms=[settings.ALGORITHM]
         )
 
-        print("================================")
-        print("JWT PAYLOAD:", payload)
-
         # Get mobile number from JWT
         mobile_number = payload.get("sub")
-
-        print("JWT MOBILE:", mobile_number)
-        print("================================")
 
         if not mobile_number:
             raise HTTPException(
@@ -158,11 +152,11 @@ async def get_current_user_object(
                 detail="Invalid token"
             )
 
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
         raise HTTPException(
             status_code=401,
             detail="Invalid token"
-        )
+        )from e
 
     # --------------------------------
     # Load User using mobile number
@@ -206,12 +200,13 @@ async def get_current_user_object(
 
     profile_result = db.execute(profile_query)
 
-    profile = profile_result.scalars().first()
+    if profile := profile_result.scalars().first():
+        return user, profile
 
-    if not profile:
+    else:
         raise HTTPException(
             status_code=404,
             detail="User profile not found"
         )
 
-    return user, profile
+    
