@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 
 from app.profile.models import User
 from app.help_support.models import (
@@ -63,13 +63,13 @@ async def get_issues(
 @router.post("/report-issue")
 async def report_issue(
     payload: ReportIssueCreateSchema,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -124,13 +124,13 @@ async def report_issue(
 
 @router.get("/ticket-history")
 async def get_ticket_history(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -161,13 +161,13 @@ async def get_ticket_history(
 @router.get("/ticket-details/{ticket_id}")
 async def get_ticket_details(
     ticket_id: int,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 

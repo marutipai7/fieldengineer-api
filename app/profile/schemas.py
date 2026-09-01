@@ -15,7 +15,7 @@ class OTPAction(str, Enum):
 
 
 class SignupSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     phone_number: str
     password: str
     role: UserRole
@@ -26,17 +26,17 @@ class SignupSchema(BaseModel):
 
 
 class SigninSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     password: str
 
 
 class RequestOTPSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     role: UserRole
     action: OTPAction
 
 class VerifyOTPSchema(BaseModel):
-    email: EmailStr
+    mobile_number: str
     otp: str
     action: OTPAction
 

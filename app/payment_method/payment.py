@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.utils.auth_utils import (
-    get_current_user_email,
+    get_current_user_mobile,
     get_current_user_object
 )
 from app.profile.models import User
@@ -45,12 +45,12 @@ router = APIRouter(
 
 
 def get_current_user(
-    email: str,
+    mobile_number: str,
     db: Session
 ):
     user = db.execute(
         select(User).where(
-            User.email == email
+            User.mobile_number == mobile_number
         )
     ).scalars().first()
 
@@ -93,12 +93,12 @@ def reset_primary_payment(user_id: int, db: Session):
 @router.post("")
 async def add_payment(
     payload: PaymentCreate,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = get_current_user(
-        current_user_email,
+        current_user_mobile,
         db
     )
     if payload.is_primary:
@@ -154,11 +154,11 @@ async def add_payment(
 @router.post("/verify-upi")
 async def verify_upi(
     payload: VerifyUpiRequest,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
-    user = get_current_user(current_user_email, db)
+    user = get_current_user(current_user_mobile, db)
 
     payment = db.execute(
         select(UpiPayment).where(
@@ -187,11 +187,11 @@ async def verify_upi(
 @router.post("/verify-bank")
 async def verify_bank(
     payload: VerifyBankRequest,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
-    user = get_current_user(current_user_email, db)
+    user = get_current_user(current_user_mobile, db)
 
     payment = db.execute(
         select(NetBankingPayment).where(
@@ -220,11 +220,11 @@ async def verify_bank(
 @router.post("/verify-card")
 async def verify_card(
     payload: VerifyCardRequest,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
-    user = get_current_user(current_user_email, db)
+    user = get_current_user(current_user_mobile, db)
 
     payment = db.execute(
         select(CardPayment).where(
@@ -252,11 +252,11 @@ async def verify_card(
 
 @router.get("")
 async def get_payments(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = get_current_user(
-        current_user_email,
+        current_user_mobile,
         db
     )
    
@@ -323,12 +323,12 @@ async def get_payments(
 async def update_payment(
     payment_id: int,
     payload: PaymentUpdate,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = get_current_user(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -416,12 +416,12 @@ async def update_payment(
 async def delete_payment(
     payment_id: int,
     payload: PaymentDelete,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = get_current_user(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -516,12 +516,12 @@ def create_payment_history(
         db.commit()
         db.refresh(payment)
 
-    except Exception:
+    except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="Failed to create payment history"
-        )
+        )from e
 
     return payment
 

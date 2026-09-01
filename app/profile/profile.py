@@ -41,7 +41,9 @@ from app.profile.models import (
 
 from app.utils.auth_utils import (
     create_access_token,
-    get_current_user_email
+    get_current_user_mobile,
+    get_current_user_object,
+    check_authorization_key
 )
 
 from app.profile.schemas import (
@@ -51,7 +53,7 @@ from app.profile.schemas import (
 
 
 from app.core.database import get_db
-from app.utils.auth_utils import get_current_user_email
+from app.utils.auth_utils import get_current_user_mobile
 from app.core.config import settings
 
 from app.profile.models import (
@@ -100,7 +102,7 @@ def get_user_and_profile(
 
 @router.get("/me")
 async def get_profile(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_email: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
@@ -123,7 +125,7 @@ async def get_profile(
 @router.put("/update")
 async def update_profile(
     payload: UserProfileSchema,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_email: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
@@ -153,11 +155,11 @@ async def update_profile(
 @router.post("/address")
 async def create_address(
     payload: AddressCreateSchema,
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -190,11 +192,11 @@ async def create_address(
     }
 @router.get("/address")
 async def get_addresses(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -330,7 +332,7 @@ async def complete_field_engineer_profile(
     experience_certificate: UploadFile = File(None),
     driving_license: UploadFile = File(None),
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     print("========== FE COMPLETE PROFILE API CALLED ==========")
@@ -346,11 +348,11 @@ async def complete_field_engineer_profile(
 
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
     print("========== POST USER ==========")
-    print("Current Email:", current_user_email)
+    print("Current Mobile Number:", current_user_mobile)
     print("User ID:", user.id)
 
     if not user:
@@ -604,11 +606,11 @@ async def complete_field_engineer_profile(
 
 @router.get("/field-engineer/me")
 async def get_field_engineer_profile(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -718,11 +720,11 @@ async def update_field_engineer_profile(
     experience_certificate: UploadFile = File(None),
     driving_license: UploadFile = File(None),
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -1009,7 +1011,7 @@ async def vendor_complete_profile(
 
    
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     
@@ -1023,7 +1025,7 @@ async def vendor_complete_profile(
     print("===============================")
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -1332,11 +1334,11 @@ async def vendor_complete_profile(
     
 @router.get("/vendor/profile")
 async def get_vendor_profile(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -1460,7 +1462,7 @@ async def get_vendor_profile(
 
 @router.post("/vendor/invite-engineer")
 async def invite_engineer(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
@@ -1469,7 +1471,7 @@ async def invite_engineer(
     with a 1-day expiry.
     """
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -1532,14 +1534,14 @@ async def invite_engineer(
 
 @router.get("/vendor/invitations")
 async def get_vendor_invitations(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
     Get all invitations sent by the current vendor.
     """
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -1589,14 +1591,14 @@ async def get_vendor_invitations(
 @router.get("/vendor/invitation/{invitation_id}")
 async def get_invitation_details(
     invitation_id: int = Path(...),
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
     Get details of a specific invitation.
     """
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -1650,14 +1652,14 @@ async def get_invitation_details(
 @router.delete("/vendor/invitation/{invitation_id}")
 async def delete_invitation(
     invitation_id: int = Path(...),
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
     Delete/revoke an invitation link.
     """
     user = db.execute(
-        select(User).where(User.email == current_user_email)
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
@@ -1713,7 +1715,7 @@ async def accept_engineer_invitation(
     token: str = Path(...),
     email: Optional[str] = Form(None),
     phone_number: Optional[str] = Form(None),
-    current_user_email: Optional[str] = Depends(get_current_user_email),
+    current_user_mobile: Optional[str] = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
@@ -1797,7 +1799,7 @@ async def accept_engineer_invitation(
     elif request.method == "POST":
 
         # Authentication required
-        if not current_user_email:
+        if not current_user_mobile:
             raise HTTPException(
                 status_code=401,
                 detail="Authentication required to consume invitation"
@@ -1806,7 +1808,7 @@ async def accept_engineer_invitation(
         # Get the current user
         user = db.execute(
             select(User).where(
-                User.email == current_user_email
+                User.mobile_number == current_user_mobile
             )
         ).scalars().first()
 
@@ -1937,13 +1939,13 @@ async def update_vendor_profile(
     cancelled_cheque: UploadFile = File(None),
     other_document: UploadFile = File(None),
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user = db.execute(
         select(User).where(
-            User.email == current_user_email
+            User.mobile_number == current_user_mobile
         )
     ).scalars().first()
 
@@ -2172,12 +2174,12 @@ async def complete_customer_profile(
     moa_aoa: UploadFile = File(None),
     bank_account_proof: UploadFile = File(None),
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -2554,11 +2556,11 @@ async def complete_customer_profile(
 
 @router.get("/customer/profile")
 async def get_customer_profile(
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -2684,12 +2686,12 @@ async def update_customer_profile(
     moa_aoa: UploadFile = File(None),
     bank_account_proof: UploadFile = File(None),
 
-    current_user_email: str = Depends(get_current_user_email),
+    current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
 
     user, profile = get_user_and_profile(
-        current_user_email,
+        current_user_mobile,
         db
     )
 
@@ -2901,7 +2903,7 @@ invite_redirect_router = APIRouter(
 async def invite_engineer_legacy_redirect(
     request: Request,
     token: str = Path(...),
-    current_user_email: Optional[str] = Depends(get_current_user_email),
+    current_user_mobile: Optional[str] = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     """
@@ -2942,11 +2944,11 @@ async def invite_engineer_legacy_redirect(
         )
 
     # 4. Existing authenticated user
-    if current_user_email:
+    if current_user_mobile:
 
         user = db.execute(
             select(User).where(
-                User.email == current_user_email
+                User.mobile_number == current_user_mobile
             )
         ).scalars().first()
 
