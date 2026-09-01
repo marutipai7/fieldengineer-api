@@ -72,7 +72,8 @@ async def request_otp(
     otp = otp_store[payload.mobile_number]["otp"]
 
     return {
-        "message": "OTP sent successfully"
+        "message": "OTP sent successfully",
+        "OTP": otp  # For testing purposes, return the OTP in the response
     }
 
 
