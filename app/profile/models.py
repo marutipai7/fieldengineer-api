@@ -31,6 +31,7 @@ class User(Base):
     id = Column(Integer,primary_key=True,autoincrement=True)
     mobile_number = Column(String(20), unique=True, nullable=False)
     phone_number = Column(String(20), unique=True)
+    email = Column(String(255), unique=True, nullable=True)
     # password_hash = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=True)
     role = Column(Enum(UserRole),nullable=False)
@@ -38,6 +39,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
 
     user_profile = relationship("UserProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
     # field_engineer_profile = relationship("FieldEngineerProfile",back_populates="user",uselist=False,cascade="all, delete-orphan")
@@ -52,6 +54,7 @@ class UserProfile(Base):
     date_of_birth = Column(Date)
     gender = Column(String(20))
     profile_image = Column(Text)
+    customer_type = Column(String(30), nullable=True)
     referral_code = Column(String(20), unique=True)
     is_associated_with_vendor = Column(
        Boolean,
@@ -135,6 +138,13 @@ class UserProfile(Base):
        back_populates="profile",
        uselist=False,
        cascade="all, delete-orphan"
+    )
+
+    customer_bank_detail = relationship(
+        "CustomerBankDetail",
+        back_populates="profile",
+        uselist=False,
+        cascade="all, delete-orphan"
     )
     # emergency_contacts = relationship("EmergencyContact",back_populates="profile",cascade="all, delete-orphan")
 
@@ -810,6 +820,16 @@ class CustomerIdentity(Base):
         nullable=True
     )
 
+    identity_full_name = Column(
+        String(255),
+        nullable=True
+    )
+
+    date_of_birth = Column(
+        Date,
+        nullable=True
+    )
+
     identity_number = Column(
         String(255),
         nullable=True
@@ -842,7 +862,7 @@ class CustomerIdentity(Base):
     )
 
     profile = relationship(
-       "UserProfile",
+        "UserProfile",
         back_populates="customer_identity"
     )
 
@@ -875,6 +895,11 @@ class CustomerBusiness(Base):
 
     industry = Column(
         String(255),
+        nullable=True
+    )
+
+    company_registration_number = Column(
+        String(100),
         nullable=True
     )
 
@@ -915,6 +940,16 @@ class CustomerBusiness(Base):
 
     gst_number = Column(
         String(100),
+        nullable=True
+    )
+
+    pan_number = Column(
+        String(100),
+        nullable=True
+    )
+
+    billing_email = Column(
+        String(255),
         nullable=True
     )
 
@@ -997,6 +1032,16 @@ class CustomerDocument(Base):
     )
 
     bank_account_proof = Column(
+        Text,
+        nullable=True
+    )
+
+    identity_proof = Column(
+        Text,
+        nullable=True
+    )
+
+    address_proof = Column(
         Text,
         nullable=True
     )
@@ -1111,3 +1156,70 @@ class CustomerDocument(Base):
 #     is_consumed = Column(Boolean, default=False)  # Marks OTP as used/consumed
 #     expires_at = Column(DateTime, nullable=False)
 #     created_at = Column(DateTime, default=datetime.utcnow)
+
+class CustomerBankDetail(Base):
+    __tablename__ = "customer_bank_details"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False
+    )
+
+    account_holder_name = Column(
+        String(255),
+        nullable=True
+    )
+
+    bank_name = Column(
+        String(255),
+        nullable=True
+    )
+
+    account_number = Column(
+        String(100),
+        nullable=True
+    )
+
+    ifsc_code = Column(
+        String(50),
+        nullable=True
+    )
+
+    local_code = Column(
+        String(50),
+        nullable=True
+    )
+
+    bank_address = Column(
+        Text,
+        nullable=True
+    )
+
+    email_invoice_for_every_payout = Column(
+        Boolean,
+        default=False
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    profile = relationship(
+        "UserProfile",
+        back_populates="customer_bank_detail"
+    )
