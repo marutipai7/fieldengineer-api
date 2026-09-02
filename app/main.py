@@ -18,7 +18,6 @@ from app.profile.auth.registration import router as auth_router
 from app.profile.profile import router as profile_router
 from app.profile.profile import invite_redirect_router
 from app.profile.address import router as address_router
-from app.profile.address import location_router
 from app.booking.booking import router as booking_router
 from app.help_support.help import router as help_router
 from app.booking.lead import router as lead_router
@@ -184,7 +183,6 @@ app.include_router(auth_router)
 app.include_router(invite_redirect_router)
 app.include_router(profile_router)
 app.include_router(address_router)
-app.include_router(location_router)
 app.include_router(booking_router)
 app.include_router(help_router)
 app.include_router(payment_router)
