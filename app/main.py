@@ -20,18 +20,19 @@ from app.profile.profile import invite_redirect_router
 from app.profile.address import router as address_router
 from app.profile.address import location_router
 from app.booking.booking import router as booking_router
-from app.help_support.help import router as help_router
 from app.booking.lead import router as lead_router
-from app.fieldengineer.help import router as field_engineer_help_router
 from app.payment_method.payment import router as payment_router
 from app.fieldengineer.services import router as field_engineer_services_router
 from app.chat.chat import router as chat_router
 from app.inappcall.call import router as inappcall_router
 from app.fieldengineer.work_preferences import router as work_preference_router
-from app.notifications.routers import (
-    router as notification_router,
-    ws_router as notification_ws_router,
-)
+# from app.notifications.routers import (
+#     router as notification_router,
+#     ws_router as notification_ws_router,
+# )
+
+from app.notifications.routes import router as notification_router
+
 from app.fieldengineer.services import router as field_engineer_router
 import redis.asyncio as redis
 from app.notifications.redis_listener import start_notification_listener
@@ -138,7 +139,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 app.include_router(lead_router)
-app.include_router(field_engineer_help_router)
 app.include_router(field_engineer_services_router)
 app.include_router(work_preference_router)
 
@@ -186,10 +186,10 @@ app.include_router(profile_router)
 app.include_router(address_router)
 app.include_router(location_router)
 app.include_router(booking_router)
-app.include_router(help_router)
 app.include_router(payment_router)
 app.include_router(chat_router)
 app.include_router(inappcall_router)
 app.include_router(notification_router)
-app.include_router(notification_ws_router)
-app.include_router(field_engineer_router)
+# app.include_router(notification_ws_router)
+# app.include_router(field_engineer_router)
+app.include_router(notification_router)
