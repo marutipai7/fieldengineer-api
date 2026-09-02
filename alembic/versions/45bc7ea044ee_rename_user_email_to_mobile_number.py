@@ -1,7 +1,6 @@
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -12,40 +11,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Rename users.email to users.mobile_number."""
+    """
+    No-op migration.
 
-    op.alter_column(
-        "users",
-        "email",
-        new_column_name="mobile_number",
-        existing_type=sa.String(length=255),
-        existing_nullable=False,
-    )
-
-    op.alter_column(
-        "users",
-        "mobile_number",
-        existing_type=sa.String(length=255),
-        type_=sa.String(length=20),
-        existing_nullable=False,
-    )
+    The database already contains users.mobile_number and does not
+    contain users.email. The current User model keeps both fields
+    separately, so the old email -> mobile_number rename is obsolete.
+    """
+    pass
 
 
 def downgrade() -> None:
-    """Rename users.mobile_number back to users.email."""
-
-    op.alter_column(
-        "users",
-        "mobile_number",
-        new_column_name="email",
-        existing_type=sa.String(length=20),
-        existing_nullable=False,
-    )
-
-    op.alter_column(
-        "users",
-        "email",
-        existing_type=sa.String(length=20),
-        type_=sa.String(length=255),
-        existing_nullable=False,
-    )
+    """
+    No-op migration.
+    """
+    pass

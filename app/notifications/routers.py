@@ -188,195 +188,195 @@ def get_notifications(
     )
 
 
-@router.post(
-    "/fcm-token",
-    response_model=FCMTokenResponse,
-)
-async def save_fcm_token(
-    request: FCMTokenRequest,
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
+# @router.post(
+#     "/fcm-token",
+#     response_model=FCMTokenResponse,
+# )
+# async def save_fcm_token(
+#     request: FCMTokenRequest,
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
 
-    await NotificationService.save_fcm_token(
-        db=db,
-        user_id=user.id,
-        fcm_token=request.fcm_token,
-    )
+#     await NotificationService.save_fcm_token(
+#         db=db,
+#         user_id=user.id,
+#         fcm_token=request.fcm_token,
+#     )
 
-    return FCMTokenResponse(
-        success=True,
-        message="FCM token saved successfully.",
-    )
+#     return FCMTokenResponse(
+#         success=True,
+#         message="FCM token saved successfully.",
+#     )
 
-@router.post("/test-push")
-async def test_push_notification(
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
+# @router.post("/test-push")
+# async def test_push_notification(
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
 
-    success = await NotificationService.send_push_notification(
-        db=db,
-        user_id=user.id,
-        title="FCM Test",
-        body="Hello from Backend 🚀",
-        data={
-            "type": "test",
-            "screen": "home",
-        },
-    )
+#     success = await NotificationService.send_push_notification(
+#         db=db,
+#         user_id=user.id,
+#         title="FCM Test",
+#         body="Hello from Backend 🚀",
+#         data={
+#             "type": "test",
+#             "screen": "home",
+#         },
+#     )
 
-    return {
-        "success": success,
-    }
+#     return {
+#         "success": success,
+#     }
 
-@router.get(
-    "/unread-count",
-    response_model=UnreadCountResponse,
-)
-def get_unread_count(
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
+# @router.get(
+#     "/unread-count",
+#     response_model=UnreadCountResponse,
+# )
+# def get_unread_count(
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
 
-    count = (
-        db.query(func.count(Notification.id))
-        .filter(
-            Notification.user_id == user.id,
-            Notification.is_read.is_(False),
-        )
-        .scalar()
-    ) or 0
+#     count = (
+#         db.query(func.count(Notification.id))
+#         .filter(
+#             Notification.user_id == user.id,
+#             Notification.is_read.is_(False),
+#         )
+#         .scalar()
+#     ) or 0
 
-    return UnreadCountResponse(
-        unread_count=count,
-    )
-
-
-@router.put("/{notification_id:uuid}/read")
-def mark_notification_as_read(
-    notification_id: UUID,
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
-
-    notification = (
-        db.query(Notification)
-        .filter(Notification.id == notification_id)
-        .first()
-    )
-
-    if not notification:
-        raise HTTPException(
-            status_code=404,
-            detail="Notification not found",
-        )
-
-    if notification.user_id != user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized",
-        )
-
-    notification.is_read = True
-
-    db.commit()
-
-    logger.info(
-        f"Notification marked as read: {notification_id}"
-    )
-
-    return {
-        "success": True,
-        "message": "Marked as read",
-    }
+#     return UnreadCountResponse(
+#         unread_count=count,
+#     )
 
 
-@router.delete("/{notification_id:uuid}")
-def delete_notification(
-    notification_id: UUID,
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
+# @router.put("/{notification_id:uuid}/read")
+# def mark_notification_as_read(
+#     notification_id: UUID,
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
 
-    notification = (
-        db.query(Notification)
-        .filter(Notification.id == notification_id)
-        .first()
-    )
+#     notification = (
+#         db.query(Notification)
+#         .filter(Notification.id == notification_id)
+#         .first()
+#     )
 
-    if not notification:
-        raise HTTPException(
-            status_code=404,
-            detail="Notification not found",
-        )
+#     if not notification:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Notification not found",
+#         )
 
-    if notification.user_id != user.id:
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized",
-        )
+#     if notification.user_id != user.id:
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Not authorized",
+#         )
 
-    db.delete(notification)
-    db.commit()
+#     notification.is_read = True
 
-    logger.info(
-        f"Notification deleted: {notification_id}"
-    )
+#     db.commit()
 
-    return {
-        "success": True,
-        "message": "Deleted",
-    }
+#     logger.info(
+#         f"Notification marked as read: {notification_id}"
+#     )
+
+#     return {
+#         "success": True,
+#         "message": "Marked as read",
+#     }
 
 
-@router.put("/{notification_id}/read-batch")
-def mark_as_read_batch(
-    notification_ids: list[str] = Query(...),
-    db: Session = Depends(get_db),
-    _auth=Depends(check_authorization_key),
-    current_user=Depends(get_current_user_object),
-):
-    user, _ = current_user
+# @router.delete("/{notification_id:uuid}")
+# def delete_notification(
+#     notification_id: UUID,
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
 
-    notifications = (
-        db.query(Notification)
-        .filter(
-            Notification.id.in_(notification_ids),
-            Notification.user_id == user.id,
-        )
-        .all()
-    )
+#     notification = (
+#         db.query(Notification)
+#         .filter(Notification.id == notification_id)
+#         .first()
+#     )
 
-    if not notifications:
-        raise HTTPException(
-            status_code=404,
-            detail="No notifications found",
-        )
+#     if not notification:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Notification not found",
+#         )
 
-    for notification in notifications:
-        notification.is_read = True
+#     if notification.user_id != user.id:
+#         raise HTTPException(
+#             status_code=403,
+#             detail="Not authorized",
+#         )
 
-    db.commit()
+#     db.delete(notification)
+#     db.commit()
 
-    logger.info(
-        f"{len(notifications)} notifications marked as read"
-    )
+#     logger.info(
+#         f"Notification deleted: {notification_id}"
+#     )
 
-    return {
-        "success": True,
-        "message": (
-            f"Updated {len(notifications)} notifications"
-        ),
-        "count": len(notifications),
-    }
+#     return {
+#         "success": True,
+#         "message": "Deleted",
+#     }
+
+
+# @router.put("/{notification_id}/read-batch")
+# def mark_as_read_batch(
+#     notification_ids: list[str] = Query(...),
+#     db: Session = Depends(get_db),
+#     _auth=Depends(check_authorization_key),
+#     current_user=Depends(get_current_user_object),
+# ):
+#     user, _ = current_user
+
+#     notifications = (
+#         db.query(Notification)
+#         .filter(
+#             Notification.id.in_(notification_ids),
+#             Notification.user_id == user.id,
+#         )
+#         .all()
+#     )
+
+#     if not notifications:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="No notifications found",
+#         )
+
+#     for notification in notifications:
+#         notification.is_read = True
+
+#     db.commit()
+
+#     logger.info(
+#         f"{len(notifications)} notifications marked as read"
+#     )
+
+#     return {
+#         "success": True,
+#         "message": (
+#             f"Updated {len(notifications)} notifications"
+#         ),
+#         "count": len(notifications),
+#     }
