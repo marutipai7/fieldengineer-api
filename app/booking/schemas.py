@@ -42,6 +42,7 @@ class OfferDetailsResponse(BaseModel):
     budget_max: float | None = None
     offer_price: float | None = None
     status: str | None = None
+    has_offer: bool = False
     accepted_field_engineer: AcceptedEngineerSummary | None = None
 
     class Config:
