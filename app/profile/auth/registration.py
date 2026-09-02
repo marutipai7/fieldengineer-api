@@ -253,6 +253,10 @@ async def verify_otp(
 
             db.add(vendor_profile)
 
+        # ----------------------------------------------------
+        # Commit User
+        # ----------------------------------------------------
+
         db.commit()
         db.refresh(user)
 
@@ -263,12 +267,26 @@ async def verify_otp(
         otp_store.pop(payload.mobile_number, None)
 
         # ----------------------------------------------------
-        # IMPORTANT:
-        # Signup does NOT return token
+        # Create JWT for SIGNUP
+        # ----------------------------------------------------
+
+        token = create_access_token(
+            {
+                "sub": user.mobile_number
+            }
+        )
+
+        # ----------------------------------------------------
+        # Return signup response with token
         # ----------------------------------------------------
 
         return {
-            "message": "Signup successful. Please signin to continue."
+            "message": "Signup successful",
+            "user_id": user.id,
+            "mobile_number": user.mobile_number,
+            "role": user.role.value,
+            "access_token": token,
+            "token_type": "bearer"
         }
 
     # ========================================================
@@ -310,7 +328,7 @@ async def verify_otp(
         otp_store.pop(payload.mobile_number, None)
 
         # ----------------------------------------------------
-        # Create JWT ONLY for signin
+        # Create JWT for SIGNIN
         # ----------------------------------------------------
 
         token = create_access_token(
@@ -318,6 +336,10 @@ async def verify_otp(
                 "sub": user.mobile_number
             }
         )
+
+        # ----------------------------------------------------
+        # Return signin response with token
+        # ----------------------------------------------------
 
         return {
             "message": "Signin successful",
