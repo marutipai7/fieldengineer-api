@@ -19,6 +19,35 @@ class BookingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AcceptedEngineerSummary(BaseModel):
+    id: int
+    user_id: int
+    full_name: str | None = None
+    mobile_number: str | None = None
+    profile_image: str | None = None
+    work_preference: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class OfferDetailsResponse(BaseModel):
+    booking_id: int
+    booking_number: str | None = None
+    service_name: str | None = None
+    sub_service_name: str | None = None
+    budget_min: float | None = None
+    budget_max: float | None = None
+    offer_price: float | None = None
+    status: str | None = None
+    accepted_field_engineer: AcceptedEngineerSummary | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class ServiceResponse(BaseModel):
     id: int
     service_name: str

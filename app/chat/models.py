@@ -1,11 +1,19 @@
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
-
 from app.core.database import Base
-from app.chat import models
+
+
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
@@ -51,13 +59,15 @@ class ChatParticipant(Base):
     chat_session_id = Column(
         Integer,
         ForeignKey("chat_sessions.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     user_id = Column(
         Integer,
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     chat_session = relationship(
@@ -67,6 +77,14 @@ class ChatParticipant(Base):
 
     user = relationship(
         "User"
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "chat_session_id",
+            "user_id",
+            name="uq_chat_session_user"
+        ),
     )
 
 
@@ -82,13 +100,15 @@ class ChatHistory(Base):
     chat_session_id = Column(
         Integer,
         ForeignKey("chat_sessions.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     sender_id = Column(
         Integer,
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     message = Column(
@@ -101,6 +121,7 @@ class ChatHistory(Base):
         nullable=False,
         default="text"
     )
+
     # text / image / video / document
 
     attachment_path = Column(

@@ -1,20 +1,34 @@
-from pydantic import BaseModel
 from datetime import datetime
 
+from pydantic import BaseModel
+
+
+# ============================================================
+# 1. CREATE / GET CHAT SESSION
+# ============================================================
 
 class CreateChatRequest(BaseModel):
-    participant_ids: list[int]
+    other_user_id: int
 
 
 class CreateChatResponse(BaseModel):
     chat_session_id: int
+    other_user_id: int
 
+
+# ============================================================
+# 2. SEND MESSAGE
+# ============================================================
 
 class SendMessageRequest(BaseModel):
     chat_session_id: int
     message: str
-    message_type: str   # text/image/file
+    message_type: str
 
+
+# ============================================================
+# 3. GET CHAT HISTORY
+# ============================================================
 
 class ChatHistoryResponse(BaseModel):
     id: int
@@ -31,14 +45,6 @@ class ChatHistoryResponse(BaseModel):
     attachment_size: int | None = None
 
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class ChatSessionHistoryResponse(BaseModel):
-    chat_session_id: int
-    created_at: datetime
-    messages: list[ChatHistoryResponse]
 
     class Config:
         from_attributes = True

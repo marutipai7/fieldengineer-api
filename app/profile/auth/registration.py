@@ -13,8 +13,6 @@ from app.profile.models import (
     UserRole
 )
 from app.profile.schemas import (
-    SignupSchema,
-    SigninSchema,
     RequestOTPSchema,
     VerifyOTPSchema,
 )
@@ -40,40 +38,86 @@ async def request_otp(
     payload: RequestOTPSchema,
     db: Session = Depends(get_db)
 ):
-    user = db.execute(
-        select(User).where(User.mobile_number == payload.mobile_number)
-    ).scalars().first()
+
+    # --------------------------------------------------------
+    # Validate action
+    # --------------------------------------------------------
+
+    if payload.action not in ["signup", "signin"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Action must be signup or signin"
+        )
+
+    # --------------------------------------------------------
+    # Find user
+    # --------------------------------------------------------
+
+    result = db.execute(
+        select(User).where(
+            User.mobile_number == payload.mobile_number
+        )
+    )
+
+    user = result.scalars().first()
+
+    # ========================================================
+    # SIGNUP
+    # ========================================================
 
     if payload.action == "signup":
 
+        # Mobile already registered
         if user:
             raise HTTPException(
                 status_code=400,
                 detail="Mobile number already registered"
             )
 
-    else:
+    # ========================================================
+    # SIGNIN
+    # ========================================================
 
+    elif payload.action == "signin":
+
+        # User must exist
         if not user:
             raise HTTPException(
                 status_code=404,
                 detail="User not found"
             )
 
+        # Check role
         if user.role != payload.role:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid role"
             )
 
+    # --------------------------------------------------------
+    # Generate and send OTP
+    # --------------------------------------------------------
+
     send_otp_to_user(payload.mobile_number)
+
+    # Store role and action along with OTP
     otp_store[payload.mobile_number]["role"] = payload.role
     otp_store[payload.mobile_number]["action"] = payload.action
+
     otp = otp_store[payload.mobile_number]["otp"]
 
+    # --------------------------------------------------------
+    # Response
+    # --------------------------------------------------------
+
     return {
-        "message": "OTP sent successfully"
+        "message": "OTP sent successfully",
+        "mobile_number": payload.mobile_number,
+        "action": payload.action,
+        "role": payload.role.value,
+        "OTP": otp   # Remove this in production
     }
+
 
 
 
@@ -82,6 +126,43 @@ async def verify_otp(
     payload: VerifyOTPSchema,
     db: Session = Depends(get_db)
 ):
+
+    # --------------------------------------------------------
+    # Validate action
+    # --------------------------------------------------------
+
+    if payload.action not in ["signup", "signin"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Action must be signup or signin"
+        )
+
+    # --------------------------------------------------------
+    # Get OTP data
+    # --------------------------------------------------------
+
+    stored_data = otp_store.get(payload.mobile_number)
+
+    if not stored_data:
+        raise HTTPException(
+            status_code=400,
+            detail="OTP expired or not requested"
+        )
+
+    # --------------------------------------------------------
+    # Check action
+    # --------------------------------------------------------
+
+    if stored_data.get("action") != payload.action:
+        raise HTTPException(
+            status_code=400,
+            detail="OTP action does not match"
+        )
+
+    # --------------------------------------------------------
+    # Verify OTP
+    # --------------------------------------------------------
+
     is_valid = verify_otp_for_user(
         payload.mobile_number,
         payload.otp
@@ -93,121 +174,189 @@ async def verify_otp(
             detail="Invalid OTP"
         )
 
-    stored_data = otp_store.get(payload.mobile_number)
+    # --------------------------------------------------------
+    # Get role stored during request OTP
+    # --------------------------------------------------------
 
-    if not stored_data:
+    role = stored_data.get("role")
+
+    if not role:
         raise HTTPException(
             status_code=400,
-            detail="OTP expired"
+            detail="OTP role information missing"
         )
 
-    role = stored_data["role"]
-    request_action = stored_data["action"]
-    verify_action = payload.action
+    # --------------------------------------------------------
+    # Find user
+    # --------------------------------------------------------
 
-    user = db.execute(
-        select(User).where(User.mobile_number == payload.mobile_number)
-    ).scalars().first()
+    result = db.execute(
+        select(User).where(
+            User.mobile_number == payload.mobile_number
+        )
+    )
 
-    # -----------------------------
-    # CREATE USER WHEN REQUIRED
-    # -----------------------------
-    if not user:
+    user = result.scalars().first()
 
-        if request_action == "signup":
+    # ========================================================
+    # SIGNUP
+    # ========================================================
 
-            user = User(
-                mobile_number=payload.mobile_number,
-                password_hash="OTP_LOGIN",
-                role=role,
-                is_verified=True
+    if payload.action == "signup":
+
+        # User should not already exist
+        if user:
+            raise HTTPException(
+                status_code=400,
+                detail="Mobile number already registered"
             )
 
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+        # ----------------------------------------------------
+        # Create User
+        # ----------------------------------------------------
 
-            if role in [
-                UserRole.USER,
-                UserRole.FIELD_ENGINEER
-            ]:
+        user = User(
+            mobile_number=payload.mobile_number,
+            password_hash="OTP_LOGIN",
+            role=role,
+            is_verified=True,
+            is_active=True
+        )
 
-                db.add(
-                    UserProfile(
-                        user_id=user.id
-                    )
-                )
+        db.add(user)
+        db.flush()
 
-            elif role == UserRole.VENDOR:
+        # ----------------------------------------------------
+        # Create User Profile
+        # ----------------------------------------------------
 
-                db.add(
-                    VendorProfile(
-                        user_id=user.id
-                    )
-                )
+        if role in [
+            UserRole.USER,
+            UserRole.FIELD_ENGINEER
+        ]:
 
-            db.commit()
+            user_profile = UserProfile(
+                user_id=user.id
+            )
 
-        else:
+            db.add(user_profile)
+
+        # ----------------------------------------------------
+        # Create Vendor Profile
+        # ----------------------------------------------------
+
+        elif role == UserRole.VENDOR:
+
+            vendor_profile = VendorProfile(
+                user_id=user.id
+            )
+
+            db.add(vendor_profile)
+
+        db.commit()
+        db.refresh(user)
+
+        # ----------------------------------------------------
+        # Remove OTP
+        # ----------------------------------------------------
+
+        otp_store.pop(payload.mobile_number, None)
+
+        # ----------------------------------------------------
+        # IMPORTANT:
+        # Signup does NOT return token
+        # ----------------------------------------------------
+
+        return {
+            "message": "Signup successful. Please signin to continue."
+        }
+
+    # ========================================================
+    # SIGNIN
+    # ========================================================
+
+    elif payload.action == "signin":
+
+        # User must exist
+        if not user:
             raise HTTPException(
                 status_code=404,
                 detail="User not found"
             )
 
-    # -----------------------------
-    # EMAIL ALREADY EXISTS DURING
-    # NORMAL SIGNUP
-    # -----------------------------
-    elif (
-        request_action == "signup"
-        and verify_action == "signup"
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
+        # ----------------------------------------------------
+        # Check role
+        # ----------------------------------------------------
+
+        if user.role != role:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid role"
+            )
+
+        # ----------------------------------------------------
+        # Mark verified
+        # ----------------------------------------------------
+
+        user.is_verified = True
+
+        db.commit()
+        db.refresh(user)
+
+        # ----------------------------------------------------
+        # Remove OTP
+        # ----------------------------------------------------
+
+        otp_store.pop(payload.mobile_number, None)
+
+        # ----------------------------------------------------
+        # Create JWT ONLY for signin
+        # ----------------------------------------------------
+
+        token = create_access_token(
+            {
+                "sub": user.mobile_number
+            }
         )
 
-    token = create_access_token(
-        {
-            "sub": user.mobile_number
+        return {
+            "message": "Signin successful",
+            "user_id": user.id,
+            "mobile_number": user.mobile_number,
+            "role": user.role.value,
+            "access_token": token,
+            "token_type": "bearer"
         }
-    )
-
-    return {
-        "message": "Success",
-        "role": user.role.value,
-        "access_token": token,
-        "token_type": "bearer"
-    }
 
 
-@router.post("/signup")
-async def signup(
-    payload: SignupSchema,
-    db: Session = Depends(get_db)
-):
-    #Check if email already exists
-    result = db.execute(
-        select(User).where(User.mobile_number == payload.mobile_number)
-    )
 
-    if existing_user := result.scalars().first():
-        raise HTTPException(
-            status_code=400,
-            detail="Mobile number already registered"
-        )
+# @router.post("/signup")
+# async def signup(
+#     payload: SignupSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     #Check if email already exists
+#     result = db.execute(
+#         select(User).where(User.mobile_number == payload.mobile_number)
+#     )
 
-    # # Create User
-    user = User(
-        mobile_number=payload.mobile_number,
-        password_hash=pbkdf2_sha256.hash(payload.password),
-        role=payload.role,
-        is_verified=False
-    )
+#     if existing_user := result.scalars().first():
+#         raise HTTPException(
+#             status_code=400,
+#             detail="Mobile number already registered"
+#         )
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+#     # # Create User
+#     user = User(
+#         mobile_number=payload.mobile_number,
+#         password_hash=pbkdf2_sha256.hash(payload.password),
+#         role=payload.role,
+#         is_verified=False
+#     )
+
+#     db.add(user)
+#     db.commit()
+#     db.refresh(user)
 
 #     # Create UserProfile for Customer & Field Engineer
 #     if payload.role in [UserRole.USER, UserRole.FIELD_ENGINEER]:
@@ -235,81 +384,81 @@ async def signup(
     }
 
 
-@router.post("/signin")
-async def signin(
-    payload: SigninSchema,
-    db: Session = Depends(get_db)
-):
-    result = db.execute(
-        select(User).where(User.mobile_number == payload.mobile_number)
-    )
+# @router.post("/signin")
+# async def signin(
+#     payload: SigninSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     result = db.execute(
+#         select(User).where(User.mobile_number == payload.mobile_number)
+#     )
 
-    user = result.scalars().first()
+#     user = result.scalars().first()
 
-    if not user:
-        raise HTTPException(            status_code=401,
-            detail="Invalid credentials"
-        )
+#     if not user:
+#         raise HTTPException(            status_code=401,
+#             detail="Invalid credentials"
+#         )
 
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+#     if not pbkdf2_sha256.verify(
+#         payload.password,
+#         user.password_hash
+#     ):
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
         
 
-    return {
-        "message": "Credentials verified successfully"
-    }
-@router.post("/signin")
-async def signin(
-    payload: SigninSchema,
-    db: Session = Depends(get_db)
-):
-    result = db.execute(
-        select(User).where(User.mobile_number == payload.mobile_number)
-    )
+#     return {
+#         "message": "Credentials verified successfully"
+#     }
+# @router.post("/signin")
+# async def signin(
+#     payload: SigninSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     result = db.execute(
+#         select(User).where(User.mobile_number == payload.mobile_number)
+#     )
 
-    user = result.scalars().first()
+#     user = result.scalars().first()
 
-    print("INPUT EMAIL =", payload.mobile_number)
-    print("INPUT PASSWORD =", payload.password)
-    print("USER FOUND =", user)
+#     print("INPUT EMAIL =", payload.mobile_number)
+#     print("INPUT PASSWORD =", payload.password)
+#     print("USER FOUND =", user)
 
-    if user:
-        print("DB EMAIL =", User.mobile_number)
-        print("DB HASH =", user.password_hash)
-        print(
-            "PASSWORD MATCH =",
-        pbkdf2_sha256.verify(
-                payload.password,
-                user.password_hash
-            )
-        )
+#     if user:
+#         print("DB EMAIL =", User.mobile_number)
+#         print("DB HASH =", user.password_hash)
+#         print(
+#             "PASSWORD MATCH =",
+#         pbkdf2_sha256.verify(
+#                 payload.password,
+#                 user.password_hash
+#             )
+#         )
 
-    if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
+#     if not user:
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
 
-    if not pbkdf2_sha256.verify(
-        payload.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials"
-        )
-#        )
+#     if not pbkdf2_sha256.verify(
+#         payload.password,
+#         user.password_hash
+#     ):
+#         raise HTTPException(
+#             status_code=401,
+#             detail="Invalid credentials"
+#         )
+# #        )
 
-    return{
-        "message": "Credentials verified successfully",
-        "role": user.role.value
-    }
+#     return{
+#         "message": "Credentials verified successfully",
+#         "role": user.role.value
+#     }
 
 
 
