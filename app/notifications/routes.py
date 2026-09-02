@@ -14,13 +14,14 @@ async def notification_websocket(
     websocket: WebSocket,
     user_id: int,
 ):
+    
     """
     WebSocket connection for real-time notifications.
 
     Example:
     ws://127.0.0.1:8000/notifications/ws/5
     """
-
+    print(f"WEBSOCKET ROUTE HIT: user_id={user_id}")
     await ws_manager.connect(
         user_id=user_id,
         websocket=websocket,
