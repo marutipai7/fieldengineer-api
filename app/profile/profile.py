@@ -17,7 +17,13 @@ from datetime import datetime, timezone
 
 from app.profile.schemas import VendorProfileSchema
 
-
+from app.profile.schemas import (
+    GSTVerifyRequest,
+    GSTVerifyResponse,
+    JoinCompanyRequest,
+    LeaveCompanyRequest,
+)
+import re   
 
 from app.profile.models import (
     User,
@@ -37,6 +43,7 @@ from app.profile.models import (
     VendorBankDetail,
     VendorNotificationPreference,
     EngineerInvitation,
+    Vendor,
 )
 
 from app.utils.auth_utils import (
@@ -252,7 +259,435 @@ async def get_addresses(
         }
         for address in addresses
     ]
+@router.get("/status")
+async def get_profile_status(
+    current_user_email: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
 
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    role = user.role.value
+
+    # No common profile
+    if not profile:
+        return {
+            "role": role,
+            "status": "incomplete"
+        }
+
+    # USER
+    if user.role == UserRole.USER:
+        required_fields = [
+            profile.full_name,
+            profile.date_of_birth,
+            profile.gender,
+            profile.profile_image
+        ]
+
+    # FIELD ENGINEER
+    elif user.role == UserRole.FIELD_ENGINEER:
+        required_fields = [
+            profile.full_name,
+            profile.date_of_birth,
+            profile.gender,
+            profile.profile_image,
+            profile.years_of_experience_id,
+            profile.primary_specialization_id,
+            profile.work_preference
+        ]
+
+    else:
+        # Vendor will be handled using VendorProfile
+        return {
+            "role": role,
+            "status": "incomplete"
+        }
+
+    is_complete = all(
+        value is not None and value != ""
+        for value in required_fields
+    )
+
+    return {
+        "role": role,
+        "status": "complete" if is_complete else "incomplete"
+    }
+
+
+@router.get("/{user_id}")
+async def get_complete_profile(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+
+    # -------------------------
+    # Get User
+    # -------------------------
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # -------------------------
+    # Get Profile
+    # -------------------------
+    profile = (
+        db.query(UserProfile)
+        .filter(UserProfile.user_id == user.id)
+        .first()
+    )
+
+    if not profile:
+        return {
+            "user_id": user.id,
+            "mobile_number": user.mobile_number,
+            "phone_number": user.phone_number,
+            "role": user.role.value,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "profile": None
+        }
+
+    # -------------------------
+    # Address
+    # -------------------------
+    addresses = (
+        db.query(UserAddress)
+        .filter(
+            UserAddress.profile_id == profile.id
+        )
+        .all()
+    )
+
+    address_data = []
+
+    for address in addresses:
+        address_data.append({
+            "address_id": address.id,
+            "address_type": address.address_type,
+            "name": address.name,
+            "flat_no": address.flat_no,
+            "street": address.street,
+            "city": address.city,
+            "state": address.state,
+            "country": address.country,
+            "postal_code": address.postal_code,
+            "latitude": address.latitude,
+            "longitude": address.longitude,
+            "is_default": address.is_default
+        })
+
+    # -------------------------
+    # Vendor
+    # -------------------------
+    vendor_data = None
+
+    if profile.vendor_id:
+        vendor = (
+            db.query(Vendor)
+            .filter(Vendor.id == profile.vendor_id)
+            .first()
+        )
+
+        if vendor:
+            vendor_data = {
+                "vendor_id": vendor.id,
+                "vendor_name": vendor.vendor_name
+            }
+
+    # -------------------------
+    # Years of Experience
+    # -------------------------
+    experience_data = None
+
+    if profile.years_of_experience_id:
+        experience = (
+            db.query(YearsOfExperience)
+            .filter(
+                YearsOfExperience.id ==
+                profile.years_of_experience_id
+            )
+            .first()
+        )
+
+        if experience:
+            experience_data = {
+                "id": experience.id,
+                "experience": experience.experience
+            }
+
+    # -------------------------
+    # Primary Specialization
+    # -------------------------
+    specialization_data = None
+
+    if profile.primary_specialization_id:
+        specialization = (
+            db.query(PrimarySpecialization)
+            .filter(
+                PrimarySpecialization.id ==
+                profile.primary_specialization_id
+            )
+            .first()
+        )
+
+        if specialization:
+            specialization_data = {
+                "id": specialization.id,
+                "specialization": specialization.specialization
+            }
+
+    # -------------------------
+    # Uploaded Documents
+    # -------------------------
+    documents_data = None
+
+    if user.role == UserRole.FIELD_ENGINEER:
+
+        documents = (
+            db.query(FieldEngineerDocument)
+            .filter(
+                FieldEngineerDocument.user_profile_id ==
+                profile.id
+            )
+            .first()
+        )
+
+        if documents:
+            documents_data = {
+                "identity_proof": documents.identity_proof,
+                "education_certificate": documents.education_certificate,
+                "work_company_id": documents.work_company_id,
+                "certification": documents.certification,
+                "experience_certificate": documents.experience_certificate,
+                "driving_license": documents.driving_license
+            }
+
+    # -------------------------
+    # Final Response
+    # -------------------------
+    return {
+        "user": {
+            "id": user.id,
+            "mobile_number": user.mobile_number,
+            "phone_number": user.phone_number,
+            "role": user.role.value,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at
+        },
+
+        "profile": {
+            "id": profile.id,
+            "full_name": profile.full_name,
+            "date_of_birth": profile.date_of_birth,
+            "gender": profile.gender,
+            "profile_image": profile.profile_image,
+            "referral_code": profile.referral_code,
+            "is_associated_with_vendor":
+                profile.is_associated_with_vendor,
+            "work_preference": profile.work_preference
+        },
+
+        "address": address_data,
+
+        "vendor": vendor_data,
+
+        "years_of_experience": experience_data,
+
+        "primary_specialization": specialization_data,
+
+        "uploaded_documents": documents_data
+    }
+    
+@router.post(
+    "/verify-gst",
+    response_model=GSTVerifyResponse
+)
+def verify_gst(
+    request: GSTVerifyRequest,
+):
+    gst_number = request.gst_number.strip().upper()
+
+    # GSTIN format:
+    # 2 digits state code
+    # 10 characters PAN
+    # 1 entity number
+    # Z
+    # 1 checksum character
+
+    gst_pattern = (
+        r"^[0-9]{2}"
+        r"[A-Z]{5}[0-9]{4}[A-Z]"
+        r"[1-9A-Z]"
+        r"Z"
+        r"[0-9A-Z]$"
+    )
+
+    if not re.match(gst_pattern, gst_number):
+        return GSTVerifyResponse(
+            gst_number=gst_number,
+            is_valid=False,
+            message="Invalid GST number format"
+        )
+
+    return GSTVerifyResponse(
+        gst_number=gst_number,
+        is_valid=True,
+        message="GST number format is valid"
+    )
+@router.post("/join-company")
+def join_company(
+    request: JoinCompanyRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object),
+):
+    user = current_user[0]
+
+    # Logged-in user is the Field Engineer
+    db_user = (
+        db.query(User)
+        .filter(User.id == user.id)
+        .first()
+    )
+
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Check vendor/company
+    vendor = (
+        db.query(Vendor)
+        .filter(Vendor.id == request.vendor_id)
+        .first()
+    )
+
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found"
+        )
+
+    # Find the logged-in user's profile
+    field_engineer_profile = (
+        db.query(UserProfile)
+        .filter(
+            UserProfile.user_id == user.id
+        )
+        .first()
+    )
+
+    if not field_engineer_profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field engineer profile not found"
+        )
+
+    # Check if already associated
+    if field_engineer_profile.is_associated_with_vendor:
+        raise HTTPException(
+            status_code=400,
+            detail="User is already associated with a company"
+        )
+
+    # Join company
+    field_engineer_profile.vendor_id = request.vendor_id
+    field_engineer_profile.is_associated_with_vendor = True
+
+    db.commit()
+    db.refresh(field_engineer_profile)
+
+    return {
+        "message": "Successfully joined company",
+        "user_id": user.id,
+        "vendor_id": request.vendor_id,
+        "field_engineer_id": field_engineer_profile.id,
+        "company_name": vendor.vendor_name,
+        "Role": user.role.value
+    }
+@router.post("/leave-company")
+def leave_company(
+    request: LeaveCompanyRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object),
+):
+    user = current_user[0]
+
+    # Check user
+    db_user = (
+        db.query(User)
+        .filter(User.id == user.id)
+        .first()
+    )
+
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Find logged-in user's profile
+    field_engineer_profile = (
+        db.query(UserProfile)
+        .filter(
+            UserProfile.user_id == user.id
+        )
+        .first()
+    )
+
+    if not field_engineer_profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field engineer profile not found"
+        )
+
+    # Check current company
+    if not field_engineer_profile.is_associated_with_vendor:
+        raise HTTPException(
+            status_code=400,
+            detail="User is not associated with any company"
+        )
+
+    # Make sure they are leaving the correct company
+    if field_engineer_profile.vendor_id != request.vendor_id:
+        raise HTTPException(
+            status_code=400,
+            detail="User is not associated with this company"
+        )
+
+    # Leave company
+    field_engineer_profile.vendor_id = None
+    field_engineer_profile.is_associated_with_vendor = False
+
+    db.commit()
+    db.refresh(field_engineer_profile)
+
+    return {
+        "message": "Successfully left company",
+        "user_id": user.id,
+        "vendor_id": request.vendor_id,
+        "field_engineer_id": field_engineer_profile.id,
+        "Role": user.role.value
+    }
 # @router.post("/complete-profile")
 # async def complete_field_engineer_profile(
 

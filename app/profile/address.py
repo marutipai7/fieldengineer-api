@@ -311,15 +311,8 @@ async def delete_address(
     }
 
 
-# ============ Country & State APIs (for Address) ============
-# Separate router without prefix so endpoints are /countries and /states
 
-location_router = APIRouter(
-    tags=["Address"]
-)
-
-
-@location_router.get("/countries", response_model=list[CountrySchema])
+@router.get("/country", response_model=list[CountrySchema])
 async def get_address_countries(
     search: str = Query(None, description="Search by country name or code"),
     db: Session = Depends(get_db)
@@ -346,19 +339,18 @@ async def get_address_countries(
     return countries
 
 
-@location_router.get("/states", response_model=list[StateSchema])
+@router.get(
+    "/states/{country_id}",
+    response_model=list[StateSchema]
+)
 async def get_address_states(
-    country_id: int = Query(..., description="Country ID to get states for"),
-    search: str = Query(None, description="Search by state name or code"),
+    country_id: int,
     db: Session = Depends(get_db)
 ):
     """
-    Get all states of a country for the address form.
-
-    Query Parameters:
-    - country_id: Country ID (required)
-    - search: Search by state name or code
+    Get all states belonging to a specific country.
     """
+
     country = db.execute(
         select(Country).where(Country.id == country_id)
     ).scalars().first()
@@ -369,17 +361,10 @@ async def get_address_states(
             detail="Country not found"
         )
 
-    query = select(State).where(State.country_id == country_id)
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.where(
-            (State.name.ilike(search_term)) |
-            (State.code.ilike(search_term))
-        )
-
     states = db.execute(
-        query.order_by(State.name)
+        select(State)
+        .where(State.country_id == country_id)
+        .order_by(State.name)
     ).scalars().all()
 
     return states
