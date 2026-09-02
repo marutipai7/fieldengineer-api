@@ -148,37 +148,7 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
-@app.get("/config")
-def config():
-    return {
-        "app_name": settings.APP_NAME,
-        "database": settings.POSTGRES_DB,
-        "email_enabled": settings.EMAIL_ENABLED
-    }
 
-@app.get("/db-check")
-def db_check():
-    try:
-        with engine.connect() as conn:
-            version = conn.execute(
-                text("SELECT version();")
-            ).scalar()
-
-        return {
-            "success": True,
-            "database": "connected",
-            "version": version
-        }
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-@app.get("/db-url")
-def db_url():
-    return {"url": settings.database_url}
 app.include_router(auth_router)
 app.include_router(invite_redirect_router)
 app.include_router(profile_router)
