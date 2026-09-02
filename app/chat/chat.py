@@ -2,6 +2,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     UploadFile,
     File,
     Form,
@@ -9,7 +10,6 @@ from fastapi import (
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
-
 from pathlib import Path
 import uuid
 
@@ -27,7 +27,8 @@ from app.chat.schemas import (
     CreateChatResponse,
     ChatHistoryResponse,
 )
-
+BASE_DIR = Path(__file__).resolve().parents[2]
+UPLOADS_DIR = BASE_DIR / "uploads"
 
 router = APIRouter(
     prefix="/chat",
@@ -163,7 +164,9 @@ def create_chat(
     "/send",
     response_model=ChatHistoryResponse
 )
-async def send_message(
+def send_message(
+    request: Request,
+
     chat_session_id: int = Form(...),
     message: str | None = Form(None),
     file: UploadFile | None = File(None),
@@ -231,97 +234,62 @@ async def send_message(
     mime_type = None
     attachment_size = None
 
+    # Physical file path
     saved_file_path = None
 
     # --------------------------------------------------------
     # Handle attachment
     # --------------------------------------------------------
+    mime_type = file.content_type or "" if file else None
 
-    if file:
+    original_filename = file.filename or "attachment"
+    extension = Path(original_filename).suffix.lower()
 
-        mime_type = file.content_type or ""
+    # Detect file type
+    if mime_type.startswith("image/") or extension in {
+        ".jpg", ".jpeg", ".png", ".gif", ".webp"
+    }:
+        message_type = "image"
 
-        if mime_type.startswith("image/"):
-            message_type = "image"
+    elif mime_type.startswith("video/") or extension in {
+        ".mp4", ".mov", ".avi", ".mkv", ".webm"
+    }:
+        message_type = "video"
 
-        elif mime_type.startswith("video/"):
-            message_type = "video"
+    elif mime_type == "application/pdf" or extension == ".pdf":
+        message_type = "document"
 
-        elif (
-            mime_type == "application/pdf"
-            or mime_type.startswith("application/")
-        ):
-            message_type = "document"
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file type"
-            )
-
-        # ----------------------------------------------------
-        # Upload directory
-        # ----------------------------------------------------
-
-        upload_dir = Path(
-            f"uploads/chat/{chat_session_id}"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type"
         )
 
-        upload_dir.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+    upload_dir = UPLOADS_DIR / "chat" / str(chat_session_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # ----------------------------------------------------
-        # Generate unique filename
-        # ----------------------------------------------------
+    extension = Path(original_filename).suffix
+    filename = f"{uuid.uuid4().hex}{extension}"
 
-        original_filename = (
-            file.filename or "attachment"
-        )
+    saved_file_path = upload_dir / filename
 
-        extension = Path(
-            original_filename
-        ).suffix
+    # IMPORTANT: synchronous read
+    file_content = file.file.read()
 
-        filename = (
-            f"{uuid.uuid4().hex}{extension}"
-        )
+    with open(saved_file_path, "wb") as buffer:
+        buffer.write(file_content)
 
-        saved_file_path = (
-            upload_dir / filename
-        )
+    # URL that can be opened in browser
+    attachment_path = (
+        str(request.base_url).rstrip("/")
+        + f"/uploads/chat/{chat_session_id}/{filename}"
+    )
 
-        # ----------------------------------------------------
-        # Save file
-        # ----------------------------------------------------
-
-        file_content = await file.read()
-
-        with open(
-            saved_file_path,
-            "wb"
-        ) as buffer:
-            buffer.write(file_content)
-
-        # ----------------------------------------------------
-        # File information
-        # ----------------------------------------------------
-
-        attachment_path = str(
-            saved_file_path
-        )
-
-        attachment_name = (
-            original_filename
-        )
-
-        attachment_size = (
-            saved_file_path.stat().st_size
-        )
+    attachment_name = original_filename
+    attachment_size = saved_file_path.stat().st_size
 
     # --------------------------------------------------------
-    # Save message
+    # Create chat message
     # --------------------------------------------------------
 
     chat_message = ChatHistory(
@@ -338,11 +306,15 @@ async def send_message(
         attachment_size=attachment_size,
     )
 
+    # --------------------------------------------------------
+    # Save to database
+    # --------------------------------------------------------
+
     try:
 
         db.add(chat_message)
 
-        # Update session timestamp
+        # Update chat session timestamp
         chat.updated_at = datetime.utcnow()
 
         db.commit()
@@ -353,15 +325,26 @@ async def send_message(
 
         db.rollback()
 
-        if saved_file_path and saved_file_path.exists():
+        # Delete uploaded file if DB save fails
+        if (
+            saved_file_path
+            and saved_file_path.exists()
+        ):
             saved_file_path.unlink()
 
-        print("CHAT MESSAGE SAVE ERROR:", repr(e))
+        print(
+            "CHAT MESSAGE SAVE ERROR:",
+            repr(e)
+        )
 
         raise HTTPException(
             status_code=500,
             detail=str(e)
-    )from e
+        ) from e
+
+    # --------------------------------------------------------
+    # Return response
+    # --------------------------------------------------------
 
     return chat_message
 

@@ -142,7 +142,7 @@ app.include_router(field_engineer_help_router)
 app.include_router(field_engineer_services_router)
 app.include_router(work_preference_router)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
