@@ -462,37 +462,51 @@ async def get_customer_offer_details(
             detail="Booking not found"
         )
 
-    if booking.accepted_field_engineer_id is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Offer details not found"
-        )
+    # ------------------------------------------------------------------
+    # Offer / accepted field engineer
+    # ------------------------------------------------------------------
+    # A booking may not have an accepted field engineer yet (the lead is
+    # still open). Instead of failing with an error, return the booking
+    # metadata with empty offer fields (has_offer=False) so the customer
+    # booking screen can render a graceful "no offer yet" state.
+    # ------------------------------------------------------------------
+    accepted_field_engineer = None
+    offer_price = None
+    has_offer = booking.accepted_field_engineer_id is not None
 
-    accepted_profile = db.execute(
-        select(UserProfile).where(
-            UserProfile.id == booking.accepted_field_engineer_id
-        )
-    ).scalars().first()
+    if booking.accepted_field_engineer_id is not None:
+        accepted_profile = db.execute(
+            select(UserProfile).where(
+                UserProfile.id == booking.accepted_field_engineer_id
+            )
+        ).scalars().first()
 
-    if not accepted_profile:
-        raise HTTPException(
-            status_code=404,
-            detail="Accepted field engineer profile not found"
-        )
+        if accepted_profile:
+            accepted_user = db.execute(
+                select(User).where(
+                    User.id == accepted_profile.user_id
+                )
+            ).scalars().first()
 
-    accepted_user = db.execute(
-        select(User).where(
-            User.id == accepted_profile.user_id
-        )
-    ).scalars().first()
+            engineer_service = db.execute(
+                select(FieldEngineerService).where(
+                    FieldEngineerService.field_engineer_id == accepted_profile.id,
+                    FieldEngineerService.service_id == booking.service_id,
+                    FieldEngineerService.sub_service_id == booking.sub_service_id,
+                )
+            ).scalars().first()
 
-    engineer_service = db.execute(
-        select(FieldEngineerService).where(
-            FieldEngineerService.field_engineer_id == accepted_profile.id,
-            FieldEngineerService.service_id == booking.service_id,
-            FieldEngineerService.sub_service_id == booking.sub_service_id,
-        )
-    ).scalars().first()
+            if engineer_service and engineer_service.price is not None:
+                offer_price = float(engineer_service.price)
+
+            accepted_field_engineer = {
+                "id": accepted_profile.id,
+                "user_id": accepted_profile.user_id,
+                "full_name": accepted_profile.full_name,
+                "mobile_number": accepted_user.mobile_number if accepted_user else None,
+                "profile_image": accepted_profile.profile_image,
+                "work_preference": accepted_profile.work_preference,
+            }
 
     service = db.execute(
         select(Service).where(
@@ -513,16 +527,10 @@ async def get_customer_offer_details(
         sub_service_name=sub_service.sub_service_name if sub_service else None,
         budget_min=booking.budget_min,
         budget_max=booking.budget_max,
-        offer_price=float(engineer_service.price) if engineer_service and engineer_service.price is not None else None,
+        offer_price=offer_price,
         status=booking.booking_status.value if booking.booking_status else None,
-        accepted_field_engineer={
-            "id": accepted_profile.id,
-            "user_id": accepted_profile.user_id,
-            "full_name": accepted_profile.full_name,
-            "mobile_number": accepted_user.mobile_number if accepted_user else None,
-            "profile_image": accepted_profile.profile_image,
-            "work_preference": accepted_profile.work_preference,
-        }
+        has_offer=has_offer,
+        accepted_field_engineer=accepted_field_engineer,
     )
 
 
