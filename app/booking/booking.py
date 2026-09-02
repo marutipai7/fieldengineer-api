@@ -59,6 +59,7 @@ from app.booking.models import (
 from app.booking.schemas import (
     ServiceResponse,
     SubServiceResponse,
+    ServiceDetailResponse,
     SiteTypeResponse,
     ProjectTypeResponse,
     LeadResponse
@@ -83,6 +84,40 @@ async def get_services(
     return db.execute(
         select(Service)
     ).scalars().all()
+
+
+# Customer Service Details API
+@router.get(
+    "/services/{service_id}",
+    response_model=ServiceDetailResponse
+)
+async def get_service_details(
+    service_id: int,
+    db: Session = Depends(get_db)
+):
+    service = db.execute(
+        select(Service).where(
+            Service.id == service_id
+        )
+    ).scalars().first()
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="Service not found"
+        )
+
+    sub_services = db.execute(
+        select(SubService).where(
+            SubService.service_id == service_id
+        ).order_by(SubService.sub_service_name)
+    ).scalars().all()
+
+    return ServiceDetailResponse(
+        id=service.id,
+        service_name=service.service_name,
+        sub_services=sub_services
+    )
 
 
 @router.get(
