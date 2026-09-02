@@ -323,7 +323,7 @@ async def get_profile_status(
     }
 
 
-@router.get("/{user_id}")
+@router.get("/get/{user_id}")
 async def get_complete_profile(
     user_id: int,
     db: Session = Depends(get_db)
