@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
-from sqlalchemy import select
+from sqlalchemy import select, func, distinct
+import json
+import re
 from app.booking.models import SiteDetail
 from app.profile.models import UserProfile
 from pathlib import Path
@@ -115,9 +117,44 @@ async def get_service_details(
         ).order_by(SubService.sub_service_name)
     ).scalars().all()
 
+    # Aggregate engineer availability & budget range for this service
+    stats = db.execute(
+        select(
+            func.count(distinct(FieldEngineerService.field_engineer_id)).label("total_engineers"),
+            func.min(FieldEngineerService.price).label("budget_min"),
+            func.max(FieldEngineerService.price).label("budget_max")
+        ).where(
+            FieldEngineerService.service_id == service_id
+        )
+    ).first()
+
+    # whats_included is stored as a JSON-encoded list of strings
+    whats_included: list[str] = []
+    if service.whats_included:
+        try:
+            parsed = json.loads(service.whats_included)
+            if isinstance(parsed, list):
+                whats_included = [str(item) for item in parsed]
+            else:
+                whats_included = [str(parsed)]
+        except (ValueError, TypeError):
+            # Fallback: treat as comma/newline separated plain text
+            whats_included = [
+                item.strip()
+                for item in re.split(r"[,\n]", service.whats_included)
+                if item.strip()
+            ]
+
     return ServiceDetailResponse(
         id=service.id,
         service_name=service.service_name,
+        image_url=service.image_url,
+        about_service=service.about_service,
+        whats_included=whats_included,
+        min_duration_hours=service.min_duration_hours or 2,
+        total_engineers_available=stats.total_engineers or 0 if stats else 0,
+        budget_min=float(stats.budget_min) if stats and stats.budget_min is not None else None,
+        budget_max=float(stats.budget_max) if stats and stats.budget_max is not None else None,
         sub_services=sub_services
     )
 

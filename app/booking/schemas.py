@@ -68,6 +68,13 @@ class SubServiceResponse(BaseModel):
 class ServiceDetailResponse(BaseModel):
     id: int
     service_name: str
+    image_url: str | None = None
+    about_service: str | None = None
+    whats_included: list[str] = []
+    min_duration_hours: int = 2
+    total_engineers_available: int = 0
+    budget_min: float | None = None
+    budget_max: float | None = None
     sub_services: list[SubServiceResponse] = []
 
     class Config:
