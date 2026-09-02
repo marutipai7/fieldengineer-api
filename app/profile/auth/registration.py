@@ -68,7 +68,7 @@ async def request_otp(
     if payload.action == "signup":
 
         # Mobile already registered
-        if user:
+        if user and user.is_active:
             raise HTTPException(
                 status_code=400,
                 detail="Mobile number already registered"
