@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
 from sqlalchemy import select
 from app.booking.models import SiteDetail
 from app.profile.models import UserProfile
+from pathlib import Path
+import uuid
 import random
 from app.booking.models import (
     Booking,
@@ -656,4 +658,84 @@ async def user_reject_booking(
         "booking_id": booking.id,
         "booking_number": booking.booking_number,
         "status": booking.booking_status.value
+    }
+
+
+# Upload Booking Documents
+
+@router.post("/{booking_id}/documents")
+async def upload_booking_documents(
+    booking_id: int,
+    files: list[UploadFile] = File(...),
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user = db.execute(
+        select(User).where(User.mobile_number == current_user_mobile)
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    # Upload directory: uploads/booking/{booking_id}/
+    upload_dir = Path(f"uploads/booking/{booking_id}")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_documents = []
+
+    for file in files:
+        content = await file.read()
+
+        original_filename = file.filename or "document"
+        extension = Path(original_filename).suffix
+        filename = f"{uuid.uuid4().hex}{extension}"
+
+        saved_path = upload_dir / filename
+
+        with open(saved_path, "wb") as buffer:
+            buffer.write(content)
+
+        document = BookingDocument(
+            booking_id=booking.id,
+            file_name=original_filename,
+            file_url=str(saved_path),
+            file_size=str(len(content))
+        )
+
+        db.add(document)
+        saved_documents.append(document)
+
+    db.commit()
+
+    for document in saved_documents:
+        db.refresh(document)
+
+    return {
+        "message": "Documents uploaded successfully",
+        "booking_id": booking.id,
+        "documents": [
+            {
+                "id": document.id,
+                "file_name": document.file_name,
+                "file_url": document.file_url,
+                "file_size": document.file_size
+            }
+            for document in saved_documents
+        ]
     }
