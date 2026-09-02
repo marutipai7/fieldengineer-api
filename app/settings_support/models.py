@@ -12,11 +12,9 @@ class UserPermission(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
-        index=True,
     )
 
-    location = Column(Boolean, default=False, nullable=False)
-    camera = Column(Boolean, default=False, nullable=False)
-    microphone = Column(Boolean, default=False, nullable=False)
-    notifications = Column(Boolean, default=False, nullable=False)
-    
+    location = Column(Boolean, nullable=False, default=False)
+    camera = Column(Boolean, nullable=False, default=False)
+    microphone = Column(Boolean, nullable=False, default=False)
+    notifications = Column(Boolean, nullable=False, default=False)

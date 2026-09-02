@@ -36,6 +36,8 @@ from app.fieldengineer.services import router as field_engineer_router
 import redis.asyncio as redis
 from app.notifications.redis_listener import start_notification_listener
 from app.settings_support.Support_setting import router as settings_support_router
+from app.settings_support.permissions import router as permissions_router
+from app.settings_support.models import UserPermission
 
 
 
@@ -164,3 +166,4 @@ app.include_router(notification_router)
 # app.include_router(field_engineer_router)
 app.include_router(notification_router)
 app.include_router(settings_support_router)
+app.include_router(permissions_router)

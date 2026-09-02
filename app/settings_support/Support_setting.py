@@ -8,7 +8,7 @@ from app.settings_support.schemas import ContactSupportSchema
 
 
 router = APIRouter(
-    prefix="/settings/Support_setting",
+    prefix="/settings",
     tags=["Settings & Support"],
 )
 
