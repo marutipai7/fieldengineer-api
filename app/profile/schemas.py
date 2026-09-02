@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from app.profile.models import UserRole
 from datetime import date
 from typing import Optional
@@ -43,12 +43,21 @@ class UserProfileSchema(BaseModel):
     gender: Optional[str] = None
     profile_image: Optional[str] = None
 
+class GSTVerifyRequest(BaseModel):
+    gst_number: str = Field(..., min_length=15, max_length=15)
 
 
+class GSTVerifyResponse(BaseModel):
+    gst_number: str
+    is_valid: bool
+    message: str
+
+class JoinCompanyRequest(BaseModel):
+    vendor_id: int
 
 
-
-
+class LeaveCompanyRequest(BaseModel):
+    vendor_id: int
 
 
 # class AddressCreateSchema(BaseModel):
