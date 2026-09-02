@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -10,12 +10,16 @@ from app.profile.models import (
     User,
     UserProfile,
     UserAddress,
-    UserRole
+    UserRole,
+    Country,
+    State
 )
 from app.profile.schemas import (
     AddressCreateSchema,
     AddressUpdateSchema,
-    
+    CountrySchema,
+    StateSchema,
+
 )
 
 router = APIRouter(
@@ -305,5 +309,79 @@ async def delete_address(
     return {
         "message": "Address deleted successfully"
     }
+
+
+# ============ Country & State APIs (for Address) ============
+# Separate router without prefix so endpoints are /countries and /states
+
+location_router = APIRouter(
+    tags=["Address"]
+)
+
+
+@location_router.get("/countries", response_model=list[CountrySchema])
+async def get_address_countries(
+    search: str = Query(None, description="Search by country name or code"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all countries for the address form.
+
+    Query Parameters:
+    - search: Search by country name or code
+    """
+    query = select(Country)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            (Country.name.ilike(search_term)) |
+            (Country.code.ilike(search_term))
+        )
+
+    countries = db.execute(
+        query.order_by(Country.name)
+    ).scalars().all()
+
+    return countries
+
+
+@location_router.get("/states", response_model=list[StateSchema])
+async def get_address_states(
+    country_id: int = Query(..., description="Country ID to get states for"),
+    search: str = Query(None, description="Search by state name or code"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all states of a country for the address form.
+
+    Query Parameters:
+    - country_id: Country ID (required)
+    - search: Search by state name or code
+    """
+    country = db.execute(
+        select(Country).where(Country.id == country_id)
+    ).scalars().first()
+
+    if not country:
+        raise HTTPException(
+            status_code=404,
+            detail="Country not found"
+        )
+
+    query = select(State).where(State.country_id == country_id)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.where(
+            (State.name.ilike(search_term)) |
+            (State.code.ilike(search_term))
+        )
+
+    states = db.execute(
+        query.order_by(State.name)
+    ).scalars().all()
+
+    return states
 
 

@@ -65,6 +65,15 @@ class SubServiceResponse(BaseModel):
         from_attributes = True
 
 
+class ServiceDetailResponse(BaseModel):
+    id: int
+    service_name: str
+    sub_services: list[SubServiceResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
 class SiteTypeResponse(BaseModel):
     id: int
     site_type_name: str
