@@ -154,7 +154,7 @@ async def get_service_details(
         about_service=service.about_service,
         whats_included=whats_included,
         min_duration_hours=service.min_duration_hours or 2,
-        total_engineers_available=stats.total_engineers or 0 if stats else 0,
+        total_engineers_available=(stats.total_engineers or 0) if stats else 0,
         budget_min=float(stats.budget_min) if stats and stats.budget_min is not None else None,
         budget_max=float(stats.budget_max) if stats and stats.budget_max is not None else None,
         sub_services=sub_services
@@ -200,6 +200,7 @@ async def get_project_types(
     ).scalars().all()
 
 
+
 @router.post("/")
 async def create_booking(
     payload: BookingCreate,
@@ -218,58 +219,46 @@ async def create_booking(
             detail="User not found"
         )
 
-    # booking = Booking(
-    #     user_id=user.id,
-    #     # booking_number=f"BK-{uuid.uuid4().hex[:8].upper()}",
-    #     service_type=payload.service_type,
-    #     description=payload.description,
-    #     scheduled_date=str(payload.scheduled_date),
-    #     scheduled_time=str(payload.scheduled_time),
-    #     address=payload.address
-    # )
-    # booking = Booking(
-    #     user_id=user.id,
-    #     booking_number=f"BK-{random.randint(100000,999999)}",
-    #     service_type=payload.service_type,
-    #     description=payload.description,
-    #     scheduled_date=str(payload.scheduled_date),
-    #     scheduled_time=str(payload.scheduled_time),
-    #     address=payload.address
-    # )
     booking = Booking(
-       user_id=user.id,
-       booking_number=f"BK-{random.randint(100000,999999)}",
+        user_id=user.id,
+        booking_number=f"BK-{random.randint(100000, 999999)}",
 
-       budget_min=payload.budget_min,
-       budget_max=payload.budget_max,
+        budget_min=payload.budget_min,
+        budget_max=payload.budget_max,
 
-       service_id=payload.service_id,
-       sub_service_id=payload.sub_service_id,
+        service_id=payload.service_id,
+        sub_service_id=payload.sub_service_id,
 
-        requirement_description=payload.requirement_description
+        requirement_description=payload.requirement_description,
+        scope_of_work=payload.scope_of_work,
+        special_requirements=payload.special_requirements
     )
 
     db.add(booking)
-    db.commit()
-    db.refresh(booking)
+    db.flush()
+
+    # -----------------------------
+    # SITE DETAILS
+    # -----------------------------
     site_detail = SiteDetail(
         booking_id=booking.id,
-
         site_name=payload.site_details.site_name,
         company_name=payload.site_details.company_name,
-
         site_type_id=payload.site_details.site_type_id,
         project_type_id=payload.site_details.project_type_id,
-
         floor_number=payload.site_details.floor_number,
         building_wing=payload.site_details.building_wing,
         landmark=payload.site_details.landmark
     )
     db.add(site_detail)
+
+    # -----------------------------
+    # ADDRESS
+    # -----------------------------
     address = BookingAddress(
         booking_id=booking.id,
-        country=payload.address.country,
-        state=payload.address.state,
+        country_id=payload.address.country_id,
+        state_id=payload.address.state_id,
         pin_code=payload.address.pin_code,
         area_locality=payload.address.area_locality,
         city=payload.address.city,
@@ -280,6 +269,9 @@ async def create_booking(
     )
     db.add(address)
 
+    # -----------------------------
+    # CONTACT PERSON
+    # -----------------------------
     contact_person = SiteContactPerson(
         booking_id=booking.id,
         contact_person_name=payload.contact_person.contact_person_name,
@@ -288,12 +280,11 @@ async def create_booking(
         email=payload.contact_person.email,
         department=payload.contact_person.department
     )
-
     db.add(contact_person)
 
-
-
-     
+    # -----------------------------
+    # ACCESS INFORMATION
+    # -----------------------------
     access_info = AccessInformation(
         booking_id=booking.id,
         entry_instructions=payload.access_information.entry_instructions,
@@ -305,34 +296,36 @@ async def create_booking(
         weekend_access=payload.access_information.weekend_access,
         id_verification_required=payload.access_information.id_verification_required
     )
-
     db.add(access_info)
-     
+
+    # -----------------------------
+    # SCHEDULE
+    # -----------------------------
     schedule = BookingSchedule(
         booking_id=booking.id,
         scheduled_date=payload.schedule.scheduled_date,
         scheduled_time=payload.schedule.scheduled_time,
+        urgency_level=payload.schedule.urgency_level,
+        single_day=payload.schedule.single_day,
         estimated_duration_hours=payload.schedule.estimated_duration_hours,
         notes=payload.schedule.notes
     )
-
     db.add(schedule)
-      
+
+    # -----------------------------
+    # DOCUMENTS
+    # -----------------------------
     for doc in payload.documents:
         document = BookingDocument(
-          booking_id=booking.id,
-          file_name=doc.file_name,
-          file_url=doc.file_url,
-          file_size=doc.file_size
+            booking_id=booking.id,
+            file_name=doc.file_name,
+            file_url=doc.file_url,
+            file_size=doc.file_size
         )
-
         db.add(document)
-    
 
-
-
-   
-    db.commit()   
+    db.commit()
+    db.refresh(booking)
 
     return {
         "message": "Booking created successfully",
@@ -363,39 +356,92 @@ async def get_bookings(
         )
     ).scalars().all()
 
-    return [
-        {
-            "id": str(booking.id),
-            # "booking_number": booking.booking_number,
-            "service_type": booking.service_type,
-            "description": booking.description,
-            "booking_status": booking.booking_status.value,
-            "scheduled_date": booking.scheduled_date,
-            "scheduled_time": booking.scheduled_time,
-            "address": booking.address
-        }
-        for booking in bookings
-    ]
+    result = []
 
+    for booking in bookings:
+
+        site_detail = db.execute(
+            select(SiteDetail).where(
+                SiteDetail.booking_id == booking.id
+            )
+        ).scalars().first()
+
+        address = db.execute(
+            select(BookingAddress).where(
+                BookingAddress.booking_id == booking.id
+            )
+        ).scalars().first()
+
+        schedule = db.execute(
+            select(BookingSchedule).where(
+                BookingSchedule.booking_id == booking.id
+            )
+        ).scalars().first()
+
+        result.append({
+            "id": str(booking.id),
+            "booking_number": booking.booking_number,
+            "service_id": booking.service_id,
+            "sub_service_id": booking.sub_service_id,
+            "booking_status": booking.booking_status.value,
+
+            "budget_min": booking.budget_min,
+            "budget_max": booking.budget_max,
+
+            "requirement_description": booking.requirement_description,
+            "scope_of_work": booking.scope_of_work,
+            "special_requirements": booking.special_requirements,
+
+            "site_details": {
+                "site_name": site_detail.site_name if site_detail else None,
+                "company_name": site_detail.company_name if site_detail else None,
+                "site_type_id": site_detail.site_type_id if site_detail else None,
+                "project_type_id": site_detail.project_type_id if site_detail else None,
+                "floor_number": site_detail.floor_number if site_detail else None,
+                "building_wing": site_detail.building_wing if site_detail else None,
+                "landmark": site_detail.landmark if site_detail else None
+            },
+
+            "address": {
+                "country_id": address.country_id if address else None,
+                "state_id": address.state_id if address else None,
+                "pin_code": address.pin_code if address else None,
+                "area_locality": address.area_locality if address else None,
+                "city": address.city if address else None,
+                "address_line_1": address.address_line_1 if address else None,
+                "address_line_2": address.address_line_2 if address else None,
+                "latitude": address.latitude if address else None,
+                "longitude": address.longitude if address else None
+            },
+
+            "schedule": {
+                "scheduled_date": schedule.scheduled_date if schedule else None,
+                "scheduled_time": schedule.scheduled_time if schedule else None,
+                "urgency_level": schedule.urgency_level if schedule else None,
+                "single_day": schedule.single_day if schedule else False,
+                "estimated_duration_hours": (
+                    schedule.estimated_duration_hours
+                    if schedule else None
+                ),
+                "notes": schedule.notes if schedule else None
+            }
+        })
+
+    return result
 
 
 @router.get("/{booking_id}")
-async def get_booking(
+async def get_booking_details(
     booking_id: int,
     current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
     user = db.execute(
-        select(User).where(
-            User.mobile_number == current_user_mobile
-        )
+        select(User).where(User.mobile_number == current_user_mobile)
     ).scalars().first()
 
     if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
     booking = db.execute(
         select(Booking).where(
@@ -405,21 +451,176 @@ async def get_booking(
     ).scalars().first()
 
     if not booking:
-        raise HTTPException(
-            status_code=404,
-            detail="Booking not found"
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    # Related records
+    site_detail = db.execute(
+        select(SiteDetail).where(SiteDetail.booking_id == booking.id)
+    ).scalars().first()
+
+    address = db.execute(
+        select(BookingAddress).where(BookingAddress.booking_id == booking.id)
+    ).scalars().first()
+
+    contact_person = db.execute(
+        select(SiteContactPerson).where(SiteContactPerson.booking_id == booking.id)
+    ).scalars().first()
+
+    access_info = db.execute(
+        select(AccessInformation).where(
+            AccessInformation.booking_id == booking.id
         )
+    ).scalars().first()
+
+    schedule = db.execute(
+        select(BookingSchedule).where(
+            BookingSchedule.booking_id == booking.id
+        )
+    ).scalars().first()
+
+    documents = db.execute(
+        select(BookingDocument).where(
+            BookingDocument.booking_id == booking.id
+        )
+    ).scalars().all()
 
     return {
         "id": str(booking.id),
-        # "booking_number": booking.booking_number,
+        "booking_number": booking.booking_number,
+
         "service_type": booking.service_type,
-        "description": booking.description,
+        "service_id": booking.service_id,
+        "sub_service_id": booking.sub_service_id,
+
+        "budget_min": booking.budget_min,
+        "budget_max": booking.budget_max,
+
+        "requirement_description": booking.requirement_description,
+        "scope_of_work": booking.scope_of_work,
+        "special_requirements": booking.special_requirements,
+
         "booking_status": booking.booking_status.value,
-        "scheduled_date": booking.scheduled_date,
-        "scheduled_time": booking.scheduled_time,
-        "address": booking.address
+
+        "site_details": {
+            "site_name": site_detail.site_name if site_detail else None,
+            "company_name": site_detail.company_name if site_detail else None,
+            "site_type_id": site_detail.site_type_id if site_detail else None,
+            "project_type_id": site_detail.project_type_id if site_detail else None,
+            "floor_number": site_detail.floor_number if site_detail else None,
+            "building_wing": site_detail.building_wing if site_detail else None,
+            "landmark": site_detail.landmark if site_detail else None
+        },
+
+        "address": {
+            "country_id": address.country_id if address else None,
+            "state_id": address.state_id if address else None,
+            "pin_code": address.pin_code if address else None,
+            "area_locality": address.area_locality if address else None,
+            "city": address.city if address else None,
+            "address_line_1": address.address_line_1 if address else None,
+            "address_line_2": address.address_line_2 if address else None,
+            "latitude": address.latitude if address else None,
+            "longitude": address.longitude if address else None
+        },
+
+        "contact_person": {
+            "contact_person_name": (
+                contact_person.contact_person_name
+                if contact_person else None
+            ),
+            "mobile_number": (
+                contact_person.mobile_number
+                if contact_person else None
+            ),
+            "alternate_number": (
+                contact_person.alternate_number
+                if contact_person else None
+            ),
+            "email": (
+                contact_person.email
+                if contact_person else None
+            ),
+            "department": (
+                contact_person.department
+                if contact_person else None
+            )
+        },
+
+        "access_information": {
+            "entry_instructions": (
+                access_info.entry_instructions
+                if access_info else None
+            ),
+            "security_gate_details": (
+                access_info.security_gate_details
+                if access_info else None
+            ),
+            "parking_availability": (
+                access_info.parking_availability
+                if access_info else None
+            ),
+            "access_timing": (
+                access_info.access_timing
+                if access_info else None
+            ),
+            "visitor_pass_required": (
+                access_info.visitor_pass_required
+                if access_info else False
+            ),
+            "night_shift_access": (
+                access_info.night_shift_access
+                if access_info else False
+            ),
+            "weekend_access": (
+                access_info.weekend_access
+                if access_info else False
+            ),
+            "id_verification_required": (
+                access_info.id_verification_required
+                if access_info else False
+            )
+        },
+
+        "schedule": {
+            "scheduled_date": (
+                schedule.scheduled_date
+                if schedule else None
+            ),
+            "scheduled_time": (
+                schedule.scheduled_time
+                if schedule else None
+            ),
+            "urgency_level": (
+                schedule.urgency_level
+                if schedule else None
+            ),
+            "single_day": (
+                schedule.single_day
+                if schedule else False
+            ),
+            "estimated_duration_hours": (
+                schedule.estimated_duration_hours
+                if schedule else None
+            ),
+            "notes": (
+                schedule.notes
+                if schedule else None
+            )
+        },
+
+        "documents": [
+            {
+                "file_name": doc.file_name,
+                "file_url": doc.file_url,
+                "file_size": doc.file_size
+            }
+            for doc in documents
+        ],
+
+        "created_at": booking.created_at,
+        "updated_at": booking.updated_at
     }
+
 @router.get(
     "/{booking_id}/offer-details",
     response_model=OfferDetailsResponse,
@@ -609,7 +810,7 @@ async def cancel_booking(
 
 # User Accept API
 
-@router.post("/{booking_id}/accept")
+@router.post("/{booking_id}/accept-offer")
 async def user_accept_booking(
     booking_id: int,
     current_user_mobile: str = Depends(get_current_user_mobile),
@@ -662,7 +863,7 @@ async def user_accept_booking(
 
 # User Reject API
 
-@router.post("/{booking_id}/reject")
+@router.post("/{booking_id}/reject-offer")
 async def user_reject_booking(
     booking_id: int,
     current_user_mobile: str = Depends(get_current_user_mobile),
