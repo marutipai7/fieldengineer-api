@@ -3164,31 +3164,13 @@ async def complete_customer_profile(
         )
 
         # ---------------------------------------------------------
-        # CUSTOMER TYPE ALREADY SET
-        # ---------------------------------------------------------
-
-        if profile.customer_type == "business":
-
-            if not has_business_data:
-                raise HTTPException(
-                    status_code=400,
-                    detail="This customer is already registered as a business and cannot continue as an individual."
-                )
-
-        elif profile.customer_type == "individual":
-
-            if has_business_data:
-                raise HTTPException(
-                    status_code=400,
-                    detail="This customer is already registered as an individual and cannot continue as a business."
-                )
-
-        # ---------------------------------------------------------
-        # FIRST TIME CHOOSING CUSTOMER TYPE
+        # INDIVIDUAL
         # ---------------------------------------------------------
 
         if not has_business_data:
 
+            # User is continuing as an individual.
+            # Business information is optional and can be added later.
             profile.customer_type = "individual"
 
             db.add(profile)
@@ -3197,9 +3179,11 @@ async def complete_customer_profile(
 
             message = "Step 4 completed successfully."
 
-        else:
+        # ---------------------------------------------------------
+        # BUSINESS INFORMATION
+        # ---------------------------------------------------------
 
-            profile.customer_type = "business"
+        else:
 
             required_business_fields = {
                 "Company": company,
@@ -3233,6 +3217,10 @@ async def complete_customer_profile(
                     }
                 )
 
+            # ---------------------------------------------------------
+            # GET OR CREATE BUSINESS INFORMATION
+            # ---------------------------------------------------------
+
             business = db.execute(
                 select(CustomerBusiness).where(
                     CustomerBusiness.user_profile_id == profile.id
@@ -3244,6 +3232,10 @@ async def complete_customer_profile(
                     user_profile_id=profile.id
                 )
                 db.add(business)
+
+            # ---------------------------------------------------------
+            # SAVE BUSINESS INFORMATION
+            # ---------------------------------------------------------
 
             business.company_name = company
             business.business_type = business_type
@@ -3260,6 +3252,15 @@ async def complete_customer_profile(
             business.designation = designation
             business.work_phone = work_phone_number
             business.work_email = work_email
+
+            # IMPORTANT:
+            # Do NOT change profile.customer_type here.
+            #
+            # If the user originally selected "individual",
+            # they can still have business information.
+            #
+            # customer_type represents the registration/UI choice,
+            # while CustomerBusiness stores optional company information.
 
             db.add(profile)
             db.add(business)
