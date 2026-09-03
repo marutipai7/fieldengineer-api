@@ -787,58 +787,58 @@ async def upload_booking_documents(
         ]
     }
 
-@router.post("/service-details")
-async def create_service_detail(
-    payload: ServiceDetailCreateSchema,
-    db: Session = Depends(get_db)
-):
-    # Check whether service exists
-    service = db.execute(
-        select(Service).where(
-            Service.id == payload.service_id
-        )
-    ).scalars().first()
+# @router.post("/service-details")
+# async def create_service_detail(
+#     payload: ServiceDetailCreateSchema,
+#     db: Session = Depends(get_db)
+# ):
+#     # Check whether service exists
+#     service = db.execute(
+#         select(Service).where(
+#             Service.id == payload.service_id
+#         )
+#     ).scalars().first()
 
-    if not service:
-        raise HTTPException(
-            status_code=404,
-            detail="Service not found"
-        )
+#     if not service:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Service not found"
+#         )
 
-    # Check whether details already exist
-    existing_detail = db.execute(
-        select(ServiceDetail).where(
-            ServiceDetail.service_id == payload.service_id
-        )
-    ).scalars().first()
+#     # Check whether details already exist
+#     existing_detail = db.execute(
+#         select(ServiceDetail).where(
+#             ServiceDetail.service_id == payload.service_id
+#         )
+#     ).scalars().first()
 
-    if existing_detail:
-        raise HTTPException(
-            status_code=400,
-            detail="Service details already exist for this service"
-        )
+#     if existing_detail:
+#         raise HTTPException(
+#             status_code=400,
+#             detail="Service details already exist for this service"
+#         )
 
-    # Create service details
-    service_detail = ServiceDetail(
-        service_id=payload.service_id,
-        image_url=payload.image_url,
-        engineers_available=payload.engineers_available,
-        price_per_hour=payload.price_per_hour,
-        min_duration_hours=payload.min_duration_hours,
-        service_tags=payload.service_tags,
-        about_service=payload.about_service,
-        whats_included=payload.whats_included
-    )
+#     # Create service details
+#     service_detail = ServiceDetail(
+#         service_id=payload.service_id,
+#         image_url=payload.image_url,
+#         engineers_available=payload.engineers_available,
+#         price_per_hour=payload.price_per_hour,
+#         min_duration_hours=payload.min_duration_hours,
+#         service_tags=payload.service_tags,
+#         about_service=payload.about_service,
+#         whats_included=payload.whats_included
+#     )
 
-    db.add(service_detail)
-    db.commit()
-    db.refresh(service_detail)
+#     db.add(service_detail)
+#     db.commit()
+#     db.refresh(service_detail)
 
-    return {
-        "message": "Service details created successfully",
-        "service_detail_id": service_detail.id,
-        "service_id": service_detail.service_id
-    }
+#     return {
+#         "message": "Service details created successfully",
+#         "service_detail_id": service_detail.id,
+#         "service_id": service_detail.service_id
+#     }
 
 @router.get("/service-details/{service_id}")
 async def get_service_detail(
