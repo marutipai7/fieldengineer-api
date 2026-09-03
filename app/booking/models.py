@@ -15,7 +15,8 @@ from sqlalchemy import (
     Text,
     Integer,
     Float,
-    Numeric
+    Numeric,
+    Boolean
 )
 
 
@@ -87,6 +88,20 @@ class Booking(Base):
     #     SqlEnum(BidStatus),
     #     default=BidStatus.OPEN
     # )
+
+        # NEW
+    scope_of_work = Column(
+        Text,
+        nullable=True
+    )
+
+    # NEW
+    special_requirements = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
     bid_status = Column(
         String(50),
         default="OPEN"
@@ -493,9 +508,17 @@ class BookingAddress(Base):
         nullable=False
     )
 
-    country = Column(String(100))
+    country_id = Column(
+        Integer,
+        ForeignKey("countries.id", ondelete="SET NULL"),
+        nullable=True
+    )
 
-    state = Column(String(100))
+    state_id = Column(
+        Integer,
+        ForeignKey("states.id", ondelete="SET NULL"),
+        nullable=True
+    )
 
     pin_code = Column(String(20))
 
@@ -584,13 +607,29 @@ class AccessInformation(Base):
 
     access_timing = Column(String(100))
 
-    visitor_pass_required = Column(Integer, default=0)
+    visitor_pass_required = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
-    night_shift_access = Column(Integer, default=0)
+    night_shift_access = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
-    weekend_access = Column(Integer, default=0)
+    weekend_access = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
-    id_verification_required = Column(Integer, default=0)
+    id_verification_required = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
     created_at = Column(
         DateTime(timezone=True),
@@ -621,6 +660,19 @@ class BookingSchedule(Base):
     scheduled_date = Column(String(50))
 
     scheduled_time = Column(String(50))
+
+        # NEW
+    urgency_level = Column(
+        String(50),
+        nullable=True
+    )
+
+    # NEW
+    single_day = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
 
     estimated_duration_hours = Column(Integer)
 
