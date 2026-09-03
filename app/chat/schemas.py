@@ -34,7 +34,7 @@ class ChatHistoryResponse(BaseModel):
     id: int
     chat_session_id: int
     sender_id: int
-
+    is_mine: bool
     message: str | None = None
 
     message_type: str

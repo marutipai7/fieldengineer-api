@@ -28,9 +28,15 @@ def get_or_create_permissions(
         permissions = UserPermission(
             user_id=user_id,
             location=False,
-            camera=False,
-            microphone=False,
+            communication=False,
             notifications=False,
+            camera=False,
+            media=False,
+            audio=False,
+            payment=False,
+            security=False,
+            network=False,
+            device=False,
         )
 
         db.add(permissions)
@@ -40,7 +46,7 @@ def get_or_create_permissions(
     return permissions
 
 
-@router.get("/")
+@router.get("")
 async def get_permissions(
     current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db),
@@ -67,14 +73,20 @@ async def get_permissions(
         "message": "Permissions fetched successfully",
         "data": {
             "location": permissions.location,
-            "camera": permissions.camera,
-            "microphone": permissions.microphone,
+            "communication": permissions.communication,
             "notifications": permissions.notifications,
+            "camera": permissions.camera,
+            "media": permissions.media,
+            "audio": permissions.audio,
+            "payment": permissions.payment,
+            "security": permissions.security,
+            "network": permissions.network,
+            "device": permissions.device,
         },
     }
 
 
-@router.put("/")
+@router.put("")
 async def update_permissions(
     payload: PermissionUpdateSchema,
     current_user_mobile: str = Depends(get_current_user_mobile),
@@ -100,14 +112,32 @@ async def update_permissions(
     if payload.location is not None:
         permissions.location = payload.location
 
-    if payload.camera is not None:
-        permissions.camera = payload.camera
-
-    if payload.microphone is not None:
-        permissions.microphone = payload.microphone
+    if payload.communication is not None:
+        permissions.communication = payload.communication
 
     if payload.notifications is not None:
         permissions.notifications = payload.notifications
+
+    if payload.camera is not None:
+        permissions.camera = payload.camera
+
+    if payload.media is not None:
+        permissions.media = payload.media
+
+    if payload.audio is not None:
+        permissions.audio = payload.audio
+
+    if payload.payment is not None:
+        permissions.payment = payload.payment
+
+    if payload.security is not None:
+        permissions.security = payload.security
+
+    if payload.network is not None:
+        permissions.network = payload.network
+
+    if payload.device is not None:
+        permissions.device = payload.device
 
     db.commit()
     db.refresh(permissions)
@@ -117,8 +147,14 @@ async def update_permissions(
         "message": "Permissions updated successfully",
         "data": {
             "location": permissions.location,
-            "camera": permissions.camera,
-            "microphone": permissions.microphone,
+            "communication": permissions.communication,
             "notifications": permissions.notifications,
+            "camera": permissions.camera,
+            "media": permissions.media,
+            "audio": permissions.audio,
+            "payment": permissions.payment,
+            "security": permissions.security,
+            "network": permissions.network,
+            "device": permissions.device,
         },
     }
