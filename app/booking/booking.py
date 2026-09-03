@@ -154,7 +154,7 @@ async def get_service_details(
         about_service=service.about_service,
         whats_included=whats_included,
         min_duration_hours=service.min_duration_hours or 2,
-        total_engineers_available=stats.total_engineers or 0 if stats else 0,
+        total_engineers_available=(stats.total_engineers or 0) if stats else 0,
         budget_min=float(stats.budget_min) if stats and stats.budget_min is not None else None,
         budget_max=float(stats.budget_max) if stats and stats.budget_max is not None else None,
         sub_services=sub_services
