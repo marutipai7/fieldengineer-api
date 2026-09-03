@@ -226,6 +226,11 @@ class Service(Base):
         nullable=False
     )
 
+    icon = Column(
+        String(100),
+        nullable=True
+    )
+
     image_url = Column(String(500), nullable=True)
 
     about_service = Column(Text, nullable=True)
@@ -248,6 +253,83 @@ class Service(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    detail = relationship(
+        "ServiceDetail",
+        back_populates="service",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
+
+class ServiceDetail(Base):
+    __tablename__ = "service_details"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    service_id = Column(
+        Integer,
+        ForeignKey("services.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True
+    )
+
+    image_url = Column(
+        String(500),
+        nullable=True
+    )
+
+    engineers_available = Column(
+        Integer,
+        nullable=False,
+        default=0
+    )
+
+    price_per_hour = Column(
+        Numeric(10, 2),
+        nullable=False
+    )
+
+    min_duration_hours = Column(
+        Integer,
+        nullable=False,
+        default=2
+    )
+
+    service_tags = Column(
+        Text,
+        nullable=True
+    )
+
+    about_service = Column(
+        Text,
+        nullable=True
+    )
+
+    whats_included = Column(
+        Text,
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    service = relationship(
+        "Service",
+        back_populates="detail"
+    )
+
 class SubService(Base):
     __tablename__ = "sub_services"
 
