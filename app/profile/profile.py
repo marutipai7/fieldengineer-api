@@ -2854,23 +2854,24 @@ async def complete_customer_profile(
     identity_date_of_birth = get_text("identity_date_of_birth")
     identity_number = get_text("identity_number")
 
-    company_name = get_text("company_name")
-    business_type = get_text("business_type")
-    industry = get_text("industry")
-    company_registration_number = get_text(
-        "company_registration_number"
-    )
-    office_address = get_text("office_address")
-    city = get_text("city")
-    state = get_text("state")
-    pincode = get_text("pincode")
-    gst_number = get_text("gst_number")
-    pan_number = get_text("pan_number")
-    billing_email = get_text("billing_email")
-    authorized_person_name = get_text("authorized_person_name")
-    designation = get_text("designation")
-    work_phone = get_text("work_phone")
-    work_email = get_text("work_email")
+    company = get_text("Company")
+    business_type = get_text("Business Type")
+    industry_type = get_text("Industry Type")
+    company_website = get_text("Company Website (Optional)")
+
+    office_address = get_text("Office Address")
+    city = get_text("City")
+    state = get_text("State")
+    pin_code = get_text("Enter PIN Code")
+
+    gst_number = get_text("GST Number")
+    tax_number = get_text("TAX Number")
+    billing_email = get_text("Billing Email")
+
+    authorized_full_name = get_text("Full Name")
+    designation = get_text("Designation")
+    work_phone_number = get_text("Phone Number")
+    work_email = get_text("Work Email")
 
     account_holder_name = get_text("account_holder_name")
     bank_name = get_text("bank_name")
@@ -2882,6 +2883,13 @@ async def complete_customer_profile(
     email_invoice_for_every_payout = get_bool(
         "email_invoice_for_every_payout"
     )
+
+    # STEP 5 FORM DATA
+    cin_number = get_text("Enter CIN Number")
+    tax_number_step5 = get_text("Enter TAX Number")
+    gst_number_step5 = get_text("Enter GST Number")
+    document_number = get_text("Enter Document Number")
+    bank_account_number = get_text("Enter Bank Account Number")
 
     # -----------------------------
     # FILE FORM DATA
@@ -2904,11 +2912,8 @@ async def complete_customer_profile(
 
     moa_aoa = form.get("moa_aoa")
 
-    bank_statement = form.get("bank_statement")
-
-    identity_proof = form.get("identity_proof")
-
-    address_proof = form.get("address_proof")
+    bank_account_proof = form.get("bank_account_proof")
+    cancelled_cheque = form.get("cancelled_cheque")
 
     # -----------------------------
     # GET USER + PROFILE
@@ -2939,6 +2944,12 @@ async def complete_customer_profile(
 
     elif step == 2:
 
+        full_name = get_text("full_name")
+        email = get_text("email")
+
+        # Phone number comes from the logged-in user
+        phone_number = current_user_mobile
+
         if not full_name:
             raise HTTPException(
                 status_code=400,
@@ -2951,21 +2962,30 @@ async def complete_customer_profile(
                 detail="Email is required."
             )
 
-        if not phone_number:
+        # Check whether email already belongs to another user
+        existing_user = db.execute(
+            select(User).where(
+                User.email == email,
+                User.id != user.id
+            )
+        ).scalar_one_or_none()
+
+        if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail="Phone number is required."
+                detail="Email address is already registered."
             )
 
+        # Update editable fields
         profile.full_name = full_name
         user.email = email
-        user.phone_number = phone_number
 
-        db.add(profile)
-        db.add(user)
+        # DO NOT update phone number.
+        # phone_number is the number used to log in.
+        # current_user_mobile is only used to identify the logged-in user.
+
         db.commit()
         db.refresh(profile)
-        db.refresh(user)
 
         message = "Step 2 completed successfully."
 
@@ -2974,6 +2994,21 @@ async def complete_customer_profile(
     # =========================================================
 
     elif step == 3:
+
+        # ---------------------------------------------------------
+        # STEP 3 FORM DATA
+        # ---------------------------------------------------------
+
+        identity_type = get_text("identity_type")
+        identity_full_name = get_text("identity_full_name")
+        identity_date_of_birth = get_text("identity_date_of_birth")
+        gender = get_text("gender")
+        identity_number = get_text("identity_number")
+        address_on_id = get_text("address_on_id")
+
+        # ---------------------------------------------------------
+        # REQUIRED VALIDATION
+        # ---------------------------------------------------------
 
         if not identity_type:
             raise HTTPException(
@@ -2993,6 +3028,12 @@ async def complete_customer_profile(
                 detail="Date of birth is required."
             )
 
+        if not gender:
+            raise HTTPException(
+                status_code=400,
+                detail="Gender is required."
+            )
+
         if not identity_number:
             raise HTTPException(
                 status_code=400,
@@ -3002,22 +3043,25 @@ async def complete_customer_profile(
         if front_image is None:
             raise HTTPException(
                 status_code=400,
-                detail="front_image is required."
+                detail="Front ID document is required."
             )
 
         if not getattr(front_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="front_image must be a valid uploaded file."
+                detail="Front ID document must be a valid uploaded file."
             )
 
         if back_image is not None and not getattr(back_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="back_image must be a valid uploaded file."
+                detail="Back ID document must be a valid uploaded file."
             )
 
-        # Parse DOB
+        # ---------------------------------------------------------
+        # PARSE DATE OF BIRTH
+        # ---------------------------------------------------------
+
         try:
             parsed_dob = date.fromisoformat(
                 identity_date_of_birth
@@ -3027,6 +3071,10 @@ async def complete_customer_profile(
                 status_code=400,
                 detail="identity_date_of_birth must be in YYYY-MM-DD format."
             )
+
+        # ---------------------------------------------------------
+        # GET OR CREATE CUSTOMER IDENTITY
+        # ---------------------------------------------------------
 
         identity = db.execute(
             select(CustomerIdentity).where(
@@ -3040,16 +3088,31 @@ async def complete_customer_profile(
             )
             db.add(identity)
 
+        # ---------------------------------------------------------
+        # SAVE IDENTITY INFORMATION
+        # ---------------------------------------------------------
+
         identity.identity_type = identity_type
         identity.identity_full_name = identity_full_name
         identity.date_of_birth = parsed_dob
         identity.identity_number = identity_number
+        identity.address_on_id = address_on_id
 
-        # Save actual uploaded files
+        # Gender belongs to UserProfile
+        profile.gender = gender
+
+        # ---------------------------------------------------------
+        # SAVE FRONT ID DOCUMENT
+        # ---------------------------------------------------------
+
         identity.front_image = await save_customer_uploaded_file(
             front_image,
             front_image.filename
         )
+
+        # ---------------------------------------------------------
+        # SAVE BACK ID DOCUMENT IF PROVIDED
+        # ---------------------------------------------------------
 
         if back_image:
             identity.back_image = await save_customer_uploaded_file(
@@ -3057,7 +3120,16 @@ async def complete_customer_profile(
                 back_image.filename
             )
 
+        # ---------------------------------------------------------
+        # SAVE
+        # ---------------------------------------------------------
+
+        db.add(profile)
+        db.add(identity)
+
         db.commit()
+
+        db.refresh(profile)
         db.refresh(identity)
 
         message = "Step 3 completed successfully."
@@ -3069,20 +3141,20 @@ async def complete_customer_profile(
     elif step == 4:
 
         business_values = [
-            company_name,
+            company,
             business_type,
-            industry,
-            company_registration_number,
+            industry_type,
+            company_website,
             office_address,
             city,
             state,
-            pincode,
+            pin_code,
             gst_number,
-            pan_number,
+            tax_number,
             billing_email,
-            authorized_person_name,
+            authorized_full_name,
             designation,
-            work_phone,
+            work_phone_number,
             work_email
         ]
 
@@ -3091,32 +3163,43 @@ async def complete_customer_profile(
             for value in business_values
         )
 
+        # ---------------------------------------------------------
+        # INDIVIDUAL
+        # ---------------------------------------------------------
+
         if not has_business_data:
 
+            # User is continuing as an individual.
+            # Business information is optional and can be added later.
             profile.customer_type = "individual"
+
+            db.add(profile)
+            db.commit()
+            db.refresh(profile)
+
+            message = "Step 4 completed successfully."
+
+        # ---------------------------------------------------------
+        # BUSINESS INFORMATION
+        # ---------------------------------------------------------
 
         else:
 
-            profile.customer_type = "business"
-
             required_business_fields = {
-                "company_name": company_name,
-                "business_type": business_type,
-                "industry": industry,
-                "company_registration_number":
-                    company_registration_number,
-                "office_address": office_address,
-                "city": city,
-                "state": state,
-                "pincode": pincode,
-                "gst_number": gst_number,
-                "pan_number": pan_number,
-                "billing_email": billing_email,
-                "authorized_person_name":
-                    authorized_person_name,
-                "designation": designation,
-                "work_phone": work_phone,
-                "work_email": work_email
+                "Company": company,
+                "Business Type": business_type,
+                "Industry Type": industry_type,
+                "Office Address": office_address,
+                "City": city,
+                "State": state,
+                "Enter PIN Code": pin_code,
+                "GST Number": gst_number,
+                "TAX Number": tax_number,
+                "Billing Email": billing_email,
+                "Full Name": authorized_full_name,
+                "Designation": designation,
+                "Phone Number": work_phone_number,
+                "Work Email": work_email
             }
 
             missing_fields = [
@@ -3134,6 +3217,10 @@ async def complete_customer_profile(
                     }
                 )
 
+            # ---------------------------------------------------------
+            # GET OR CREATE BUSINESS INFORMATION
+            # ---------------------------------------------------------
+
             business = db.execute(
                 select(CustomerBusiness).where(
                     CustomerBusiness.user_profile_id == profile.id
@@ -3146,29 +3233,44 @@ async def complete_customer_profile(
                 )
                 db.add(business)
 
-            business.company_name = company_name
+            # ---------------------------------------------------------
+            # SAVE BUSINESS INFORMATION
+            # ---------------------------------------------------------
+
+            business.company_name = company
             business.business_type = business_type
-            business.industry = industry
-            business.company_registration_number = (
-                company_registration_number
-            )
+            business.industry = industry_type
+            business.website = company_website
             business.office_address = office_address
             business.city = city
             business.state = state
-            business.pincode = pincode
+            business.pincode = pin_code
             business.gst_number = gst_number
-            business.pan_number = pan_number
+            business.tax_number = tax_number
             business.billing_email = billing_email
-            business.authorized_person_name = (
-                authorized_person_name
-            )
+            business.authorized_person_name = authorized_full_name
             business.designation = designation
-            business.work_phone = work_phone
+            business.work_phone = work_phone_number
             business.work_email = work_email
 
-        db.commit()
+            # IMPORTANT:
+            # Do NOT change profile.customer_type here.
+            #
+            # If the user originally selected "individual",
+            # they can still have business information.
+            #
+            # customer_type represents the registration/UI choice,
+            # while CustomerBusiness stores optional company information.
 
-        message = "Step 4 completed successfully."
+            db.add(profile)
+            db.add(business)
+
+            db.commit()
+
+            db.refresh(profile)
+            db.refresh(business)
+
+            message = "Step 4 completed successfully."
 
     # =========================================================
     # STEP 5
@@ -3188,34 +3290,86 @@ async def complete_customer_profile(
             )
             db.add(documents)
 
-        if profile.customer_type == "business":
+        # ---------------------------------------------------------
+        # INDIVIDUAL CUSTOMER
+        # ---------------------------------------------------------
 
-            required_documents = {
-                "company_registration_certificate":
-                    company_registration_certificate,
-                "tax_identification_card":
-                    tax_identification_card,
-                "gst_certificate":
-                    gst_certificate,
-                "moa_aoa":
-                    moa_aoa,
-                "bank_statement":
-                    bank_statement
-            }
+        if profile.customer_type == "individual":
 
-            missing_documents = [
-                name
-                for name, file in required_documents.items()
-                if not file
-            ]
-
-            if missing_documents:
+            if not tax_identification_card:
                 raise HTTPException(
                     status_code=400,
-                    detail={
-                        "message": "Required business documents are missing.",
-                        "missing_documents": missing_documents
-                    }
+                    detail="Tax Identification Card is required."
+                )
+
+            if not tax_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter TAX Number is required."
+                )
+
+            documents.tax_identification_card = (
+                await save_customer_uploaded_file(
+                    tax_identification_card,
+                    tax_identification_card.filename
+                )
+            )
+
+            documents.tax_number = tax_number_step5
+
+            # Optional Bank Account Proof
+            if bank_account_proof:
+                documents.bank_account_proof = (
+                    await save_customer_uploaded_file(
+                        bank_account_proof,
+                        bank_account_proof.filename
+                    )
+                )
+
+            # Optional Bank Account Number
+            if bank_account_number:
+                documents.bank_account_number = bank_account_number
+
+        # ---------------------------------------------------------
+        # BUSINESS CUSTOMER
+        # ---------------------------------------------------------
+
+        else:
+
+            if not company_registration_certificate:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Company Registration Document is required."
+                )
+
+            if not cin_number:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter CIN Number is required."
+                )
+
+            if not tax_identification_card:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tax Identification Document is required."
+                )
+
+            if not tax_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter TAX Number is required."
+                )
+
+            if not gst_certificate:
+                raise HTTPException(
+                    status_code=400,
+                    detail="GST or SST Documents is required."
+                )
+
+            if not gst_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter GST Number is required."
                 )
 
             documents.company_registration_certificate = (
@@ -3225,12 +3379,16 @@ async def complete_customer_profile(
                 )
             )
 
+            documents.cin_number = cin_number
+
             documents.tax_identification_card = (
                 await save_customer_uploaded_file(
                     tax_identification_card,
                     tax_identification_card.filename
                 )
             )
+
+            documents.tax_number = tax_number_step5
 
             documents.gst_certificate = (
                 await save_customer_uploaded_file(
@@ -3239,48 +3397,31 @@ async def complete_customer_profile(
                 )
             )
 
-            documents.moa_aoa = (
-                await save_customer_uploaded_file(
-                    moa_aoa,
-                    moa_aoa.filename
-                )
-            )
+            documents.gst_number = gst_number_step5
 
-            # bank_statement → bank_account_proof
-            documents.bank_account_proof = (
-                await save_customer_uploaded_file(
-                    bank_statement,
-                    bank_statement.filename
-                )
-            )
-
-        else:
-
-            if not identity_proof:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Identity proof is required."
+            # Optional MOA / AOA
+            if moa_aoa:
+                documents.moa_aoa = (
+                    await save_customer_uploaded_file(
+                        moa_aoa,
+                        moa_aoa.filename
+                    )
                 )
 
-            if not address_proof:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Address proof is required."
+                if document_number:
+                    documents.document_number = document_number
+
+            # Optional Bank Account Proof
+            if bank_account_proof:
+                documents.bank_account_proof = (
+                    await save_customer_uploaded_file(
+                        bank_account_proof,
+                        bank_account_proof.filename
+                    )
                 )
 
-            documents.identity_proof = (
-                await save_customer_uploaded_file(
-                    identity_proof,
-                    identity_proof.filename
-                )
-            )
-
-            documents.address_proof = (
-                await save_customer_uploaded_file(
-                    address_proof,
-                    address_proof.filename
-                )
-            )
+                if bank_account_number:
+                    documents.bank_account_number = bank_account_number
 
         db.commit()
         db.refresh(documents)
@@ -3335,9 +3476,26 @@ async def complete_customer_profile(
         bank.ifsc_code = ifsc_code
         bank.local_code = local_code
         bank.bank_address = bank_address
+
         bank.email_invoice_for_every_payout = (
             email_invoice_for_every_payout
         )
+
+        # ---------------------------------------------------------
+        # OPTIONAL CANCELLED CHEQUE
+        # ---------------------------------------------------------
+
+        if cancelled_cheque:
+            if not getattr(cancelled_cheque, "filename", None):
+                raise HTTPException(
+                    status_code=400,
+                    detail="cancelled_cheque must be a valid uploaded file."
+                )
+
+            bank.cancelled_cheque = await save_customer_uploaded_file(
+                cancelled_cheque,
+                cancelled_cheque.filename
+            )
 
         db.commit()
         db.refresh(bank)
@@ -3404,7 +3562,9 @@ def calculate_customer_completion(
     # STEP 1 - PHONE VERIFIED
     # =========================================================
 
-    step1_completed = bool(user.is_verified)
+    step1_completed = bool(
+        user and user.is_verified
+    )
 
     if step1_completed:
         completed_steps += 1
@@ -3413,9 +3573,12 @@ def calculate_customer_completion(
     # STEP 2 - BASIC INFORMATION
     # =========================================================
 
+    # Phone number is the login phone number stored on User.
+    # It is not editable in Step 2.
     step2_completed = bool(
         profile
         and profile.full_name
+        and user
         and user.email
         and user.phone_number
     )
@@ -3432,18 +3595,22 @@ def calculate_customer_completion(
         and identity.identity_type
         and identity.identity_full_name
         and identity.date_of_birth
+        and profile
+        and profile.gender
         and identity.identity_number
+        and identity.front_image
     )
 
     if step3_completed:
         completed_steps += 1
 
     # =========================================================
-    # STEP 4 - BUSINESS INFORMATION
+    # STEP 4 - BUSINESS / INDIVIDUAL
     # =========================================================
 
     if profile and profile.customer_type == "individual":
 
+        # Individual customers skip business details.
         step4_completed = True
 
     elif profile and profile.customer_type == "business":
@@ -3453,13 +3620,12 @@ def calculate_customer_completion(
             and business.company_name
             and business.business_type
             and business.industry
-            and business.company_registration_number
-            and business.gst_number
+            and business.office_address
             and business.city
             and business.state
             and business.pincode
-            and business.office_address
-            and business.pan_number
+            and business.gst_number
+            and business.tax_number
             and business.billing_email
             and business.authorized_person_name
             and business.designation
@@ -3481,8 +3647,8 @@ def calculate_customer_completion(
 
         step5_completed = bool(
             documents
-            and documents.identity_proof
-            and documents.address_proof
+            and documents.tax_identification_card
+            and documents.tax_number
         )
 
     elif profile and profile.customer_type == "business":
@@ -3490,10 +3656,11 @@ def calculate_customer_completion(
         step5_completed = bool(
             documents
             and documents.company_registration_certificate
+            and documents.cin_number
             and documents.tax_identification_card
+            and documents.tax_number
             and documents.gst_certificate
-            and documents.moa_aoa
-            and documents.bank_account_proof
+            and documents.gst_number
         )
 
     else:
@@ -3514,8 +3681,6 @@ def calculate_customer_completion(
         and bank.ifsc_code
         and bank.local_code
         and bank.bank_address
-        and documents
-        and documents.bank_account_proof
     )
 
     if step6_completed:
@@ -3544,7 +3709,6 @@ def calculate_customer_completion(
             "step_6": step6_completed
         }
     }
-
 
 
 @router.get("/customer/profile")
