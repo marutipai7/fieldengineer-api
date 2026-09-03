@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
 from sqlalchemy import select, func, distinct
 import json
+from sqlalchemy import select
 import re
-from app.booking.models import SiteDetail
 from app.profile.models import UserProfile
 from pathlib import Path
 import uuid
 import random
+from app.booking.schemas import ServiceDetailCreateSchema
 from app.booking.models import (
     Booking,
     SiteDetail,
@@ -16,7 +17,8 @@ from app.booking.models import (
     SiteContactPerson,
     AccessInformation,
     BookingSchedule,
-    BookingDocument
+    BookingDocument,
+    ServiceDetail
 )
 from app.booking.models import BookingAddress
 from app.booking.models import (
@@ -783,4 +785,100 @@ async def upload_booking_documents(
             }
             for document in saved_documents
         ]
+    }
+
+@router.post("/service-details")
+async def create_service_detail(
+    payload: ServiceDetailCreateSchema,
+    db: Session = Depends(get_db)
+):
+    # Check whether service exists
+    service = db.execute(
+        select(Service).where(
+            Service.id == payload.service_id
+        )
+    ).scalars().first()
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="Service not found"
+        )
+
+    # Check whether details already exist
+    existing_detail = db.execute(
+        select(ServiceDetail).where(
+            ServiceDetail.service_id == payload.service_id
+        )
+    ).scalars().first()
+
+    if existing_detail:
+        raise HTTPException(
+            status_code=400,
+            detail="Service details already exist for this service"
+        )
+
+    # Create service details
+    service_detail = ServiceDetail(
+        service_id=payload.service_id,
+        image_url=payload.image_url,
+        engineers_available=payload.engineers_available,
+        price_per_hour=payload.price_per_hour,
+        min_duration_hours=payload.min_duration_hours,
+        service_tags=payload.service_tags,
+        about_service=payload.about_service,
+        whats_included=payload.whats_included
+    )
+
+    db.add(service_detail)
+    db.commit()
+    db.refresh(service_detail)
+
+    return {
+        "message": "Service details created successfully",
+        "service_detail_id": service_detail.id,
+        "service_id": service_detail.service_id
+    }
+
+@router.get("/service-details/{service_id}")
+async def get_service_detail(
+    service_id: int,
+    db: Session = Depends(get_db)
+):
+    service = db.execute(
+        select(Service).where(
+            Service.id == service_id
+        )
+    ).scalars().first()
+
+    if not service:
+        raise HTTPException(
+            status_code=404,
+            detail="Service not found"
+        )
+
+    service_detail = db.execute(
+        select(ServiceDetail).where(
+            ServiceDetail.service_id == service_id
+        )
+    ).scalars().first()
+
+    if not service_detail:
+        raise HTTPException(
+            status_code=404,
+            detail="Service details not found"
+        )
+
+    return {
+        "service_id": service.id,
+        "service_name": service.service_name,
+        "icon": service.icon,
+
+        "image_url": service_detail.image_url,
+        "engineers_available": service_detail.engineers_available,
+        "price_per_hour": service_detail.price_per_hour,
+        "min_duration_hours": service_detail.min_duration_hours,
+        "service_tags": service_detail.service_tags,
+        "about_service": service_detail.about_service,
+        "whats_included": service_detail.whats_included
     }
