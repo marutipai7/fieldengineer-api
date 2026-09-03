@@ -866,6 +866,8 @@ class CustomerIdentity(Base):
         back_populates="customer_identity"
     )
 
+    address_on_id = Column(Text, nullable=True)
+
 
 class CustomerBusiness(Base):
     __tablename__ = "customer_businesses"
@@ -1067,6 +1069,16 @@ class CustomerDocument(Base):
         back_populates="customer_documents"
     )
 
+    cin_number = Column(String(100), nullable=True)
+
+    tax_number = Column(String(100), nullable=True)
+
+    gst_number = Column(String(100), nullable=True)
+
+    document_number = Column(String(100), nullable=True)
+
+    bank_account_number = Column(String(100), nullable=True)
+
 
 
 
@@ -1207,6 +1219,8 @@ class CustomerBankDetail(Base):
         Boolean,
         default=False
     )
+
+    cancelled_cheque = Column(String(500), nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),
