@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.profile.models import User
 from app.utils.auth_utils import get_current_user_mobile
-from app.settings_support.schemas import ContactSupportSchema
 
 
 router = APIRouter(
@@ -68,39 +67,6 @@ async def get_about_us():
             ]
         }
     }
-
-
-# ============================================================
-# CONTACT SUPPORT
-# ============================================================
-
-@router.post("/contact-support")
-async def contact_support(
-    payload: ContactSupportSchema,
-    current_user_mobile: str = Depends(get_current_user_mobile),
-    db: Session = Depends(get_db)
-):
-    user = (
-        db.query(User)
-        .filter(User.mobile_number == current_user_mobile)
-        .first()
-    )
-
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
-
-    return {
-        "success": True,
-        "message": "Support request submitted successfully",
-        "data": {
-            "subject": payload.subject,
-            "message": payload.message
-        }
-    }
-
 
 # ============================================================
 # DELETE ACCOUNT

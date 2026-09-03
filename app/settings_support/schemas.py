@@ -1,9 +1,6 @@
-from typing import Optional
 from pydantic import BaseModel
+from typing import Optional
 
-class ContactSupportSchema(BaseModel):
-    subject: str
-    message: str
 
 class PermissionUpdateSchema(BaseModel):
     location: Optional[bool] = None
@@ -16,7 +13,3 @@ class PermissionUpdateSchema(BaseModel):
     security: Optional[bool] = None
     network: Optional[bool] = None
     device: Optional[bool] = None
-
-class ContactSupportSchema(BaseModel):
-    subject: str
-    message: str
