@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from app.booking.models import ServiceType
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 
 # class BookingCreate(BaseModel):
 #     service_type: ServiceType
@@ -297,3 +298,13 @@ class LeadListResponse(BaseModel):
     booking_number: str | None = None
     status: str | None = None
     can_accept: bool = False
+
+class ServiceDetailCreateSchema(BaseModel):
+    service_id: int
+    image_url: Optional[str] = None
+    engineers_available: int
+    price_per_hour: float
+    min_duration_hours: int = 2
+    service_tags: Optional[str] = None
+    about_service: Optional[str] = None
+    whats_included: Optional[str] = None

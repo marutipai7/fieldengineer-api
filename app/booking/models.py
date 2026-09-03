@@ -231,18 +231,6 @@ class Service(Base):
         nullable=True
     )
 
-    image_url = Column(String(500), nullable=True)
-
-    about_service = Column(Text, nullable=True)
-
-    whats_included = Column(Text, nullable=True)
-
-    min_duration_hours = Column(
-        Integer,
-        nullable=False,
-        server_default="2"
-    )
-
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
