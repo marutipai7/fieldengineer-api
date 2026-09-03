@@ -108,8 +108,8 @@ class SiteDetailCreate(BaseModel):
     landmark: str | None = None
 
 class BookingAddressCreate(BaseModel):
-    country: str
-    state: str
+    country_id: int
+    state_id: int
     pin_code: str
     area_locality: str
     city: str
@@ -130,16 +130,19 @@ class AccessInformationCreate(BaseModel):
     security_gate_details: str | None = None
     parking_availability: str | None = None
     access_timing: str | None = None
-    visitor_pass_required: int = 0
-    night_shift_access: int = 0
-    weekend_access: int = 0
-    id_verification_required: int = 0
+
+    visitor_pass_required: bool = False
+    night_shift_access: bool = False
+    weekend_access: bool = False
+    id_verification_required: bool = False
 
  
  
 class BookingScheduleCreate(BaseModel):
     scheduled_date: str
     scheduled_time: str
+    urgency_level: str | None = None
+    single_day: bool = False
     estimated_duration_hours: int | None = None
     notes: str | None = None
 
@@ -156,6 +159,8 @@ class BookingCreate(BaseModel):
     sub_service_id: int
 
     requirement_description: str | None = None
+    scope_of_work: str | None = None
+    special_requirements: bool = False
 
     site_details: SiteDetailCreate
 

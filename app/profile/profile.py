@@ -18,6 +18,10 @@ from pathlib import Path as FilePath
 from uuid import uuid4
 from app.booking.models import Booking
 from app.payment_method.models import PaymentHistory
+from app.profile.models import UserProfile, CustomerBankDetail
+
+from app.booking.models import Booking, FieldEngineerService
+
 
 
 from app.profile.schemas import VendorProfileSchema
@@ -161,33 +165,33 @@ async def get_profile(
         }
     }
 
-@router.put("/update")
-async def update_profile(
-    payload: UserProfileSchema,
-    current_user_email: str = Depends(get_current_user_mobile),
-    db: Session = Depends(get_db)
-):
-    user, profile = get_user_and_profile(
-        current_user_email,
-        db
-    )
+# @router.put("/update")
+# async def update_profile(
+#     payload: UserProfileSchema,
+#     current_user_email: str = Depends(get_current_user_mobile),
+#     db: Session = Depends(get_db)
+# ):
+#     user, profile = get_user_and_profile(
+#         current_user_email,
+#         db
+#     )
 
-    if not profile:
-        profile = UserProfile(
-            user_id=user.id
-        )
-        db.add(profile)
+#     if not profile:
+#         profile = UserProfile(
+#             user_id=user.id
+#         )
+#         db.add(profile)
 
-    profile.full_name = payload.full_name
-    profile.date_of_birth = payload.date_of_birth
-    profile.gender = payload.gender
-    profile.profile_image = payload.profile_image
+#     profile.full_name = payload.full_name
+#     profile.date_of_birth = payload.date_of_birth
+#     profile.gender = payload.gender
+#     profile.profile_image = payload.profile_image
 
-    db.commit()
+#     db.commit()
 
-    return {
-        "message": "Profile updated successfully"
-    }
+#     return {
+#         "message": "Profile updated successfully"
+#     }
 
 
 
@@ -265,617 +269,435 @@ async def get_addresses(
         }
         for address in addresses
     ]
-# @router.get("/status")
-# async def get_profile_status(
-#     current_user_email: str = Depends(get_current_user_mobile),
-#     db: Session = Depends(get_db)
-# ):
-#     user, profile = get_user_and_profile(
-#         current_user_email,
-#         db
-#     )
-
-#     if not user:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="User not found"
-#         )
-
-#     role = user.role.value
-
-#     # ---------------------------------------------------------
-#     # NO PROFILE
-#     # ---------------------------------------------------------
-
-#     if not profile:
-#         return {
-#             "role": role,
-
-#             "is_profile_complete": False,
-#             "completion_percentage": 0,
-
-#             "completed_steps": [],
-#             "missing_steps": [],
-
-#             "completed_fields": [],
-#             "missing_fields": [],
-
-#             "total_steps": 0,
-
-#             "is_under_review": False,
-#             "review_status": "not_submitted",
-#             "review_message": None
-#         }
-
-#     # ---------------------------------------------------------
-#     # USER PROFILE STEPS
-#     # ---------------------------------------------------------
-
-#     if user.role == UserRole.USER:
-
-#         steps = [
-#             {
-#                 "step": "basic_details",
-#                 "label": "Basic Details",
-#                 "fields": {
-#                     "full_name": profile.full_name,
-#                     "date_of_birth": profile.date_of_birth,
-#                     "gender": profile.gender
-#                 }
-#             },
-#             {
-#                 "step": "profile_image",
-#                 "label": "Profile Image",
-#                 "fields": {
-#                     "profile_image": profile.profile_image
-#                 }
-#             },
-#             {
-#                 "step": "address",
-#                 "label": "Address",
-#                 "fields": {
-#                     "address": getattr(profile, "addresses", None)
-#                 }
-#             }
-#         ]
-
-#     # ---------------------------------------------------------
-#     # FIELD ENGINEER PROFILE STEPS
-#     # ---------------------------------------------------------
-
-#     elif user.role == UserRole.FIELD_ENGINEER:
-
-#         steps = [
-#             {
-#                 "step": "basic_details",
-#                 "label": "Basic Details",
-#                 "fields": {
-#                     "full_name": profile.full_name,
-#                     "date_of_birth": profile.date_of_birth,
-#                     "gender": profile.gender
-#                 }
-#             },
-#             {
-#                 "step": "profile_image",
-#                 "label": "Profile Image",
-#                 "fields": {
-#                     "profile_image": profile.profile_image
-#                 }
-#             },
-#             {
-#                 "step": "experience",
-#                 "label": "Experience",
-#                 "fields": {
-#                     "years_of_experience_id":
-#                         profile.years_of_experience_id
-#                 }
-#             },
-#             {
-#                 "step": "specialization",
-#                 "label": "Primary Specialization",
-#                 "fields": {
-#                     "primary_specialization_id":
-#                         profile.primary_specialization_id
-#                 }
-#             },
-#             {
-#                 "step": "work_preference",
-#                 "label": "Work Preference",
-#                 "fields": {
-#                     "work_preference": profile.work_preference
-#                 }
-#             },
-#             {
-#                 "step": "address",
-#                 "label": "Address",
-#                 "fields": {
-#                     "address": getattr(profile, "addresses", None)
-#                 }
-#             }
-#         ]
-
-#     # ---------------------------------------------------------
-#     # VENDOR
-#     # ---------------------------------------------------------
-
-#     elif user.role == UserRole.VENDOR:
-
-#         return {
-#             "role": role,
-
-#             "is_profile_complete": False,
-#             "completion_percentage": 0,
-
-#             "completed_steps": [],
-#             "missing_steps": [],
-
-#             "completed_fields": [],
-#             "missing_fields": [],
-
-#             "total_steps": 0,
-
-#             "is_under_review": False,
-#             "review_status": "not_submitted",
-#             "review_message": None,
-
-#             "message": "Vendor profile uses VendorProfile"
-#         }
-
-#     # ---------------------------------------------------------
-#     # CALCULATE COMPLETION
-#     # ---------------------------------------------------------
-
-#     completed_steps = []
-#     missing_steps = []
-
-#     completed_fields = []
-#     missing_fields = []
-
-#     for step in steps:
-
-#         step_complete = True
-
-#         for field_name, value in step["fields"].items():
-
-#             # Handle normal values
-#             if value is not None and value != "":
-#                 completed_fields.append(field_name)
-#             else:
-#                 missing_fields.append(field_name)
-#                 step_complete = False
-
-#         if step_complete:
-#             completed_steps.append(step["step"])
-#         else:
-#             missing_steps.append(step["step"])
-
-#     total_steps = len(steps)
-#     completed_step_count = len(completed_steps)
-
-#     if total_steps > 0:
-#         completion_percentage = round(
-#             (completed_step_count / total_steps) * 100
-#         )
-#     else:
-#         completion_percentage = 0
-
-#     is_profile_complete = (
-#         completed_step_count == total_steps
-#     )
-
-#     # ---------------------------------------------------------
-#     # REVIEW STATUS
-#     # ---------------------------------------------------------
-
-#     review_status = getattr(
-#         profile,
-#         "review_status",
-#         ProfileReviewStatus.NOT_SUBMITTED
-#     )
-
-#     if hasattr(review_status, "value"):
-#         review_status = review_status.value
-
-#     is_under_review = (
-#         review_status == "under_review"
-#     )
-
-#     review_message = getattr(
-#         profile,
-#         "review_message",
-#         None
-#     )
-
-#     # ---------------------------------------------------------
-#     # FINAL RESPONSE
-#     # ---------------------------------------------------------
-
-#     return {
-#         "role": role,
-
-#         "is_profile_complete": is_profile_complete,
-#         "completion_percentage": completion_percentage,
-
-#         "completed_steps": completed_steps,
-#         "missing_steps": missing_steps,
-
-#         "completed_fields": completed_fields,
-#         "missing_fields": missing_fields,
-
-#         "completed_step_count": completed_step_count,
-#         "total_steps": total_steps,
-
-#         "is_under_review": is_under_review,
-#         "review_status": review_status,
-#         "review_message": review_message
-#     }
-
-
-# @router.get("/get/{user_id}")
-# async def get_complete_profile(
-#     user_id: int,
-#     db: Session = Depends(get_db)
-# ):
-
-#     # -------------------------
-#     # Get User
-#     # -------------------------
-#     user = (
-#         db.query(User)
-#         .filter(User.id == user_id)
-#         .first()
-#     )
-
-#     if not user:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="User not found"
-#         )
-
-#     # -------------------------
-#     # Get Profile
-#     # -------------------------
-#     profile = (
-#         db.query(UserProfile)
-#         .filter(UserProfile.user_id == user.id)
-#         .first()
-#     )
-
-#     if not profile:
-#         return {
-#             "user_id": user.id,
-#             "mobile_number": user.mobile_number,
-#             "phone_number": user.phone_number,
-#             "role": user.role.value,
-#             "is_active": user.is_active,
-#             "is_verified": user.is_verified,
-#             "profile": None
-#         }
-
-#     # -------------------------
-#     # Address
-#     # -------------------------
-#     addresses = (
-#         db.query(UserAddress)
-#         .filter(
-#             UserAddress.profile_id == profile.id
-#         )
-#         .all()
-#     )
-
-#     address_data = []
-
-#     for address in addresses:
-#         address_data.append({
-#             "address_id": address.id,
-#             "address_type": address.address_type,
-#             "name": address.name,
-#             "flat_no": address.flat_no,
-#             "street": address.street,
-#             "city": address.city,
-#             "state": address.state,
-#             "country": address.country,
-#             "postal_code": address.postal_code,
-#             "latitude": address.latitude,
-#             "longitude": address.longitude,
-#             "is_default": address.is_default
-#         })
-
-#     # -------------------------
-#     # Vendor
-#     # -------------------------
-#     vendor_data = None
-
-#     if profile.vendor_id:
-#         vendor = (
-#             db.query(Vendor)
-#             .filter(Vendor.id == profile.vendor_id)
-#             .first()
-#         )
-
-#         if vendor:
-#             vendor_data = {
-#                 "vendor_id": vendor.id,
-#                 "vendor_name": vendor.vendor_name
-#             }
-
-#     # -------------------------
-#     # Years of Experience
-#     # -------------------------
-#     experience_data = None
-
-#     if profile.years_of_experience_id:
-#         experience = (
-#             db.query(YearsOfExperience)
-#             .filter(
-#                 YearsOfExperience.id ==
-#                 profile.years_of_experience_id
-#             )
-#             .first()
-#         )
-
-#         if experience:
-#             experience_data = {
-#                 "id": experience.id,
-#                 "experience": experience.experience
-#             }
-
-#     # -------------------------
-#     # Primary Specialization
-#     # -------------------------
-#     specialization_data = None
-
-#     if profile.primary_specialization_id:
-#         specialization = (
-#             db.query(PrimarySpecialization)
-#             .filter(
-#                 PrimarySpecialization.id ==
-#                 profile.primary_specialization_id
-#             )
-#             .first()
-#         )
-
-#         if specialization:
-#             specialization_data = {
-#                 "id": specialization.id,
-#                 "specialization": specialization.specialization
-#             }
-
-#     # -------------------------
-#     # Uploaded Documents
-#     # -------------------------
-#     documents_data = None
-
-#     if user.role == UserRole.FIELD_ENGINEER:
-
-#         documents = (
-#             db.query(FieldEngineerDocument)
-#             .filter(
-#                 FieldEngineerDocument.user_profile_id ==
-#                 profile.id
-#             )
-#             .first()
-#         )
-
-#         if documents:
-#             documents_data = {
-#                 "identity_proof": documents.identity_proof,
-#                 "education_certificate": documents.education_certificate,
-#                 "work_company_id": documents.work_company_id,
-#                 "certification": documents.certification,
-#                 "experience_certificate": documents.experience_certificate,
-#                 "driving_license": documents.driving_license
-#             }
-
-#     # -------------------------
-#     # Final Response
-#     # -------------------------
-#     return {
-#         "user": {
-#             "id": user.id,
-#             "mobile_number": user.mobile_number,
-#             "phone_number": user.phone_number,
-#             "role": user.role.value,
-#             "is_active": user.is_active,
-#             "is_verified": user.is_verified,
-#             "created_at": user.created_at,
-#             "updated_at": user.updated_at
-#         },
-
-#         "profile": {
-#             "id": profile.id,
-#             "full_name": profile.full_name,
-#             "date_of_birth": profile.date_of_birth,
-#             "gender": profile.gender,
-#             "profile_image": profile.profile_image,
-#             "referral_code": profile.referral_code,
-#             "is_associated_with_vendor":
-#                 profile.is_associated_with_vendor,
-#             "work_preference": profile.work_preference
-#         },
-
-#         "address": address_data,
-
-#         "vendor": vendor_data,
-
-#         "years_of_experience": experience_data,
-
-#         "primary_specialization": specialization_data,
-
-#         "uploaded_documents": documents_data
-#     }
+@router.get("/status")
+async def get_profile_status(
+    current_user_email: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user, profile = get_user_and_profile(
+        current_user_email,
+        db
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    role = user.role.value
+
+    # No common profile
+    if not profile:
+        return {
+            "role": role,
+            "status": "incomplete"
+        }
+
+    # USER
+    if user.role == UserRole.USER:
+        required_fields = [
+            profile.full_name,
+            profile.date_of_birth,
+            profile.gender,
+            profile.profile_image
+        ]
+
+    # FIELD ENGINEER
+    elif user.role == UserRole.FIELD_ENGINEER:
+        required_fields = [
+            profile.full_name,
+            profile.date_of_birth,
+            profile.gender,
+            profile.profile_image,
+            profile.years_of_experience_id,
+            profile.primary_specialization_id,
+            profile.work_preference
+        ]
+
+    else:
+        # Vendor will be handled using VendorProfile
+        return {
+            "role": role,
+            "status": "incomplete"
+        }
+
+    is_complete = all(
+        value is not None and value != ""
+        for value in required_fields
+    )
+
+    return {
+        "role": role,
+        "status": "complete" if is_complete else "incomplete"
+    }
+
+
+@router.get("/get/{user_id}")
+async def get_complete_profile(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+
+    # -------------------------
+    # Get User
+    # -------------------------
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # -------------------------
+    # Get Profile
+    # -------------------------
+    profile = (
+        db.query(UserProfile)
+        .filter(UserProfile.user_id == user.id)
+        .first()
+    )
+
+    if not profile:
+        return {
+            "user_id": user.id,
+            "mobile_number": user.mobile_number,
+            "phone_number": user.phone_number,
+            "role": user.role.value,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "profile": None
+        }
+
+    # -------------------------
+    # Address
+    # -------------------------
+    addresses = (
+        db.query(UserAddress)
+        .filter(
+            UserAddress.profile_id == profile.id
+        )
+        .all()
+    )
+
+    address_data = []
+
+    for address in addresses:
+        address_data.append({
+            "address_id": address.id,
+            "address_type": address.address_type,
+            "name": address.name,
+            "flat_no": address.flat_no,
+            "street": address.street,
+            "city": address.city,
+            "state": address.state,
+            "country": address.country,
+            "postal_code": address.postal_code,
+            "latitude": address.latitude,
+            "longitude": address.longitude,
+            "is_default": address.is_default
+        })
+
+    # -------------------------
+    # Vendor
+    # -------------------------
+    vendor_data = None
+
+    if profile.vendor_id:
+        vendor = (
+            db.query(Vendor)
+            .filter(Vendor.id == profile.vendor_id)
+            .first()
+        )
+
+        if vendor:
+            vendor_data = {
+                "vendor_id": vendor.id,
+                "vendor_name": vendor.vendor_name
+            }
+
+    # -------------------------
+    # Years of Experience
+    # -------------------------
+    experience_data = None
+
+    if profile.years_of_experience_id:
+        experience = (
+            db.query(YearsOfExperience)
+            .filter(
+                YearsOfExperience.id ==
+                profile.years_of_experience_id
+            )
+            .first()
+        )
+
+        if experience:
+            experience_data = {
+                "id": experience.id,
+                "experience": experience.experience
+            }
+
+    # -------------------------
+    # Primary Specialization
+    # -------------------------
+    specialization_data = None
+
+    if profile.primary_specialization_id:
+        specialization = (
+            db.query(PrimarySpecialization)
+            .filter(
+                PrimarySpecialization.id ==
+                profile.primary_specialization_id
+            )
+            .first()
+        )
+
+        if specialization:
+            specialization_data = {
+                "id": specialization.id,
+                "specialization": specialization.specialization
+            }
+
+    # -------------------------
+    # Uploaded Documents
+    # -------------------------
+    documents_data = None
+
+    if user.role == UserRole.FIELD_ENGINEER:
+
+        documents = (
+            db.query(FieldEngineerDocument)
+            .filter(
+                FieldEngineerDocument.user_profile_id ==
+                profile.id
+            )
+            .first()
+        )
+
+        if documents:
+            documents_data = {
+                "identity_proof": documents.identity_proof,
+                "education_certificate": documents.education_certificate,
+                "work_company_id": documents.work_company_id,
+                "certification": documents.certification,
+                "experience_certificate": documents.experience_certificate,
+                "driving_license": documents.driving_license
+            }
+
+    # -------------------------
+    # Final Response
+    # -------------------------
+    return {
+        "user": {
+            "id": user.id,
+            "mobile_number": user.mobile_number,
+            "phone_number": user.phone_number,
+            "role": user.role.value,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at
+        },
+
+        "profile": {
+            "id": profile.id,
+            "full_name": profile.full_name,
+            "date_of_birth": profile.date_of_birth,
+            "gender": profile.gender,
+            "profile_image": profile.profile_image,
+            "referral_code": profile.referral_code,
+            "is_associated_with_vendor":
+                profile.is_associated_with_vendor,
+            "work_preference": profile.work_preference
+        },
+
+        "address": address_data,
+
+        "vendor": vendor_data,
+
+        "years_of_experience": experience_data,
+
+        "primary_specialization": specialization_data,
+
+        "uploaded_documents": documents_data
+    }
     
-# @router.post(
-#     "/verify-gst",
-#     response_model=GSTVerifyResponse
-# )
-# def verify_gst(
-#     request: GSTVerifyRequest,
-# ):
-#     gst_number = request.gst_number.strip().upper()
+@router.post(
+    "/verify-gst",
+    response_model=GSTVerifyResponse
+)
+def verify_gst(
+    request: GSTVerifyRequest,
+):
+    gst_number = request.gst_number.strip().upper()
 
-#     # GSTIN format:
-#     # 2 digits state code
-#     # 10 characters PAN
-#     # 1 entity number
-#     # Z
-#     # 1 checksum character
+    # GSTIN format:
+    # 2 digits state code
+    # 10 characters PAN
+    # 1 entity number
+    # Z
+    # 1 checksum character
 
-#     gst_pattern = (
-#         r"^[0-9]{2}"
-#         r"[A-Z]{5}[0-9]{4}[A-Z]"
-#         r"[1-9A-Z]"
-#         r"Z"
-#         r"[0-9A-Z]$"
-#     )
+    gst_pattern = (
+        r"^[0-9]{2}"
+        r"[A-Z]{5}[0-9]{4}[A-Z]"
+        r"[1-9A-Z]"
+        r"Z"
+        r"[0-9A-Z]$"
+    )
 
-#     if not re.match(gst_pattern, gst_number):
-#         return GSTVerifyResponse(
-#             gst_number=gst_number,
-#             is_valid=False,
-#             message="Invalid GST number format"
-#         )
+    if not re.match(gst_pattern, gst_number):
+        return GSTVerifyResponse(
+            gst_number=gst_number,
+            is_valid=False,
+            message="Invalid GST number format"
+        )
 
-#     return GSTVerifyResponse(
-#         gst_number=gst_number,
-#         is_valid=True,
-#         message="GST number format is valid"
-#     )
-# @router.post("/join-company")
-# def join_company(
-#     request: JoinCompanyRequest,
-#     db: Session = Depends(get_db),
-#     current_user=Depends(get_current_user_object),
-# ):
-#     user = current_user[0]
+    return GSTVerifyResponse(
+        gst_number=gst_number,
+        is_valid=True,
+        message="GST number format is valid"
+    )
+@router.post("/join-company")
+def join_company(
+    request: JoinCompanyRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object),
+):
+    user = current_user[0]
 
-#     # Logged-in user is the Field Engineer
-#     db_user = (
-#         db.query(User)
-#         .filter(User.id == user.id)
-#         .first()
-#     )
+    # Logged-in user is the Field Engineer
+    db_user = (
+        db.query(User)
+        .filter(User.id == user.id)
+        .first()
+    )
 
-#     if not db_user:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="User not found"
-#         )
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
 
-#     # Check vendor/company
-#     vendor = (
-#         db.query(Vendor)
-#         .filter(Vendor.id == request.vendor_id)
-#         .first()
-#     )
+    # Check vendor/company
+    vendor = (
+        db.query(Vendor)
+        .filter(Vendor.id == request.vendor_id)
+        .first()
+    )
 
-#     if not vendor:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="Company not found"
-#         )
+    if not vendor:
+        raise HTTPException(
+            status_code=404,
+            detail="Company not found"
+        )
 
-#     # Find the logged-in user's profile
-#     field_engineer_profile = (
-#         db.query(UserProfile)
-#         .filter(
-#             UserProfile.user_id == user.id
-#         )
-#         .first()
-#     )
+    # Find the logged-in user's profile
+    field_engineer_profile = (
+        db.query(UserProfile)
+        .filter(
+            UserProfile.user_id == user.id
+        )
+        .first()
+    )
 
-#     if not field_engineer_profile:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="Field engineer profile not found"
-#         )
+    if not field_engineer_profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field engineer profile not found"
+        )
 
-#     # Check if already associated
-#     if field_engineer_profile.is_associated_with_vendor:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="User is already associated with a company"
-#         )
+    # Check if already associated
+    if field_engineer_profile.is_associated_with_vendor:
+        raise HTTPException(
+            status_code=400,
+            detail="User is already associated with a company"
+        )
 
-#     # Join company
-#     field_engineer_profile.vendor_id = request.vendor_id
-#     field_engineer_profile.is_associated_with_vendor = True
+    # Join company
+    field_engineer_profile.vendor_id = request.vendor_id
+    field_engineer_profile.is_associated_with_vendor = True
 
-#     db.commit()
-#     db.refresh(field_engineer_profile)
+    db.commit()
+    db.refresh(field_engineer_profile)
 
-#     return {
-#         "message": "Successfully joined company",
-#         "user_id": user.id,
-#         "vendor_id": request.vendor_id,
-#         "field_engineer_id": field_engineer_profile.id,
-#         "company_name": vendor.vendor_name,
-#         "Role": user.role.value
-#     }
-# @router.post("/leave-company")
-# def leave_company(
-#     request: LeaveCompanyRequest,
-#     db: Session = Depends(get_db),
-#     current_user=Depends(get_current_user_object),
-# ):
-#     user = current_user[0]
+    return {
+        "message": "Successfully joined company",
+        "user_id": user.id,
+        "vendor_id": request.vendor_id,
+        "field_engineer_id": field_engineer_profile.id,
+        "company_name": vendor.vendor_name,
+        "Role": user.role.value
+    }
+@router.post("/leave-company")
+def leave_company(
+    request: LeaveCompanyRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_object),
+):
+    user = current_user[0]
 
-#     # Check user
-#     db_user = (
-#         db.query(User)
-#         .filter(User.id == user.id)
-#         .first()
-#     )
+    # Check user
+    db_user = (
+        db.query(User)
+        .filter(User.id == user.id)
+        .first()
+    )
 
-#     if not db_user:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="User not found"
-#         )
+    if not db_user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
 
-#     # Find logged-in user's profile
-#     field_engineer_profile = (
-#         db.query(UserProfile)
-#         .filter(
-#             UserProfile.user_id == user.id
-#         )
-#         .first()
-#     )
+    # Find logged-in user's profile
+    field_engineer_profile = (
+        db.query(UserProfile)
+        .filter(
+            UserProfile.user_id == user.id
+        )
+        .first()
+    )
 
-#     if not field_engineer_profile:
-#         raise HTTPException(
-#             status_code=404,
-#             detail="Field engineer profile not found"
-#         )
+    if not field_engineer_profile:
+        raise HTTPException(
+            status_code=404,
+            detail="Field engineer profile not found"
+        )
 
-#     # Check current company
-#     if not field_engineer_profile.is_associated_with_vendor:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="User is not associated with any company"
-#         )
+    # Check current company
+    if not field_engineer_profile.is_associated_with_vendor:
+        raise HTTPException(
+            status_code=400,
+            detail="User is not associated with any company"
+        )
 
-#     # Make sure they are leaving the correct company
-#     if field_engineer_profile.vendor_id != request.vendor_id:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="User is not associated with this company"
-#         )
+    # Make sure they are leaving the correct company
+    if field_engineer_profile.vendor_id != request.vendor_id:
+        raise HTTPException(
+            status_code=400,
+            detail="User is not associated with this company"
+        )
 
-#     # Leave company
-#     field_engineer_profile.vendor_id = None
-#     field_engineer_profile.is_associated_with_vendor = False
+    # Leave company
+    field_engineer_profile.vendor_id = None
+    field_engineer_profile.is_associated_with_vendor = False
 
-#     db.commit()
-#     db.refresh(field_engineer_profile)
+    db.commit()
+    db.refresh(field_engineer_profile)
 
-#     return {
-#         "message": "Successfully left company",
-#         "user_id": user.id,
-#         "vendor_id": request.vendor_id,
-#         "field_engineer_id": field_engineer_profile.id,
-#         "Role": user.role.value
-#     }
+    return {
+        "message": "Successfully left company",
+        "user_id": user.id,
+        "vendor_id": request.vendor_id,
+        "field_engineer_id": field_engineer_profile.id,
+        "Role": user.role.value
+    }
 # @router.post("/complete-profile")
 # async def complete_field_engineer_profile(
 
@@ -952,15 +774,31 @@ async def complete_field_engineer_profile(
   
     step: int = Path(...),
 
-    full_name: str = Form(...),
+    # full_name: str = Form(...),
+    full_name: Optional[str] = Form(None),
     date_of_birth: date = Form(None),
     gender: str = Form(None),
 
-    is_associated_with_vendor: bool = Form(False),
+    # is_associated_with_vendor: bool = Form(False),
+    is_associated_with_vendor: Optional[bool] = Form(None),
 
     vendor_id: int = Form(None),
     years_of_experience_id: int = Form(None),
     primary_specialization_id: int = Form(None),
+    referral_code: Optional[str] = Form(None),
+    service_id: Optional[int] = Form(None),
+    sub_service_id: Optional[int] = Form(None),
+    price: Optional[float] = Form(None),
+    account_holder_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    confirm_account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    local_code: Optional[str] = Form(None),
+    bank_address: Optional[str] = Form(None),
+    email_invoice_for_every_payout: Optional[bool] = Form(None),
+    cancelled_cheque: UploadFile = File(None),
+
 
     primary_city: str = Form(None),
     service_radius: int = Form(None),
@@ -972,7 +810,8 @@ async def complete_field_engineer_profile(
     day_of_week: int = Form(None),
     start_time: time = Form(None),
     end_time: time = Form(None),
-    is_available: bool = Form(True),
+    # is_available: bool = Form(True),
+    is_available: Optional[bool] = Form(None),
 
     identity_proof: UploadFile = File(None),
     education_certificate: UploadFile = File(None),
@@ -1044,17 +883,29 @@ async def complete_field_engineer_profile(
         if gender is not None:
             profile.gender = gender
 
+        # if is_associated_with_vendor is not None:
+        #     profile.is_associated_with_vendor = is_associated_with_vendor
+
+        # if vendor_id is not None:
+        #     profile.vendor_id = vendor_id
         if is_associated_with_vendor is not None:
             profile.is_associated_with_vendor = is_associated_with_vendor
 
-        if vendor_id is not None:
-            profile.vendor_id = vendor_id
+            if not is_associated_with_vendor:
+                profile.vendor_id = None
+            elif vendor_id is not None:
+                profile.vendor_id = vendor_id
+
 
         if years_of_experience_id is not None:
             profile.years_of_experience_id = years_of_experience_id
 
         if primary_specialization_id is not None:
             profile.primary_specialization_id = primary_specialization_id
+
+
+        if referral_code is not None:
+            profile.referral_code = referral_code
 
         if profile_image:
             os.makedirs("uploads/field_engineer", exist_ok=True)
@@ -1220,7 +1071,9 @@ async def complete_field_engineer_profile(
         if end_time is not None:
             availability.end_time = end_time
 
-        availability.is_available = is_available
+        # availability.is_available = is_available
+        if is_available is not None:
+            availability.is_available = is_available
 
         print("========== AVAILABILITY ==========")
         print("Profile ID:", profile.id)
@@ -1238,6 +1091,116 @@ async def complete_field_engineer_profile(
             "step": 4,
             "message": "Step 4 completed successfully.",
             "profile_id": profile.id
+        }
+    
+    elif step == 5:
+        if service_id is None:
+            raise HTTPException(status_code=400, detail="service_id is required")
+
+        if sub_service_id is None:
+            raise HTTPException(status_code=400, detail="sub_service_id is required")
+
+        if price is None:
+           raise HTTPException(status_code=400, detail="price is required")
+
+        existing_service = db.query(FieldEngineerService).filter(
+            FieldEngineerService.field_engineer_id == profile.id,
+            FieldEngineerService.service_id == service_id,
+            FieldEngineerService.sub_service_id == sub_service_id
+        ).first()
+
+        if existing_service:
+            existing_service.price = price
+        else:
+            new_service = FieldEngineerService(
+               field_engineer_id=profile.id,
+               service_id=service_id,
+               sub_service_id=sub_service_id,
+               price=price
+            )
+            db.add(new_service)
+
+        db.commit()
+
+        return {
+           "success": True,
+            "step": step,
+            "message": "Service and rate saved successfully",
+            "profile_id": profile.id,
+            "service_id": service_id,
+            "sub_service_id": sub_service_id,
+            "price": price
+        }
+    
+
+    elif step == 6:
+        # if account_number and confirm_account_number:
+        #    if account_number != confirm_account_number:
+        #         raise HTTPException(
+        #            status_code=400,
+        #            detail="Account number and confirm account number do not match"
+        #         )
+        if account_number is not None:
+            if confirm_account_number is None:
+                raise HTTPException(
+                   status_code=400,
+                   detail="Confirm account number is required"
+                )
+
+            if account_number != confirm_account_number:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Account number and confirm account number do not match"
+                )
+
+        bank_detail = db.query(CustomerBankDetail).filter(
+           CustomerBankDetail.user_profile_id == profile.id
+        ).first()
+
+        if not bank_detail:
+            bank_detail = CustomerBankDetail(
+               user_profile_id=profile.id
+            )
+            db.add(bank_detail)
+
+        if account_holder_name is not None:
+            bank_detail.account_holder_name = account_holder_name
+
+        if bank_name is not None:
+            bank_detail.bank_name = bank_name
+
+        if account_number is not None:
+            bank_detail.account_number = account_number
+
+        if ifsc_code is not None:
+            bank_detail.ifsc_code = ifsc_code
+
+        if local_code is not None:
+            bank_detail.local_code = local_code
+
+        if bank_address is not None:
+            bank_detail.bank_address = bank_address
+
+        if email_invoice_for_every_payout is not None:
+            bank_detail.email_invoice_for_every_payout = (
+                email_invoice_for_every_payout
+            )
+
+        db.commit()
+        db.refresh(bank_detail)
+
+        return {
+           "success": True,
+            "step": step,
+            "message": "Bank and payout details saved successfully",
+            "profile_id": profile.id,
+            "account_holder_name": bank_detail.account_holder_name,
+            "bank_name": bank_detail.bank_name,
+            "account_number": bank_detail.account_number,
+            "ifsc_code": bank_detail.ifsc_code,
+            "local_code": bank_detail.local_code,
+            "bank_address": bank_detail.bank_address,
+            "email_invoice_for_every_payout": bank_detail.email_invoice_for_every_payout
         }
 
     else:
@@ -1287,9 +1250,28 @@ async def get_field_engineer_profile(
         )
     ).scalars().all()
 
+
+    bank_detail = db.execute(
+        select(CustomerBankDetail).where(
+            CustomerBankDetail.user_profile_id == profile.id
+        )
+    ).scalars().first()
+    
+
+
+
+
+    services = db.execute(
+        select(FieldEngineerService).where(
+            FieldEngineerService.field_engineer_id == profile.id
+        )
+    ).scalars().all()
+
     return {
         "email": user.email,
-        "phone_number": user.phone_number,
+        # "phone_number": user.phone_number,
+         "phone_number": user.phone_number or user.mobile_number,
+        
         "role": user.role.value,
 
         "profile": {
@@ -1320,6 +1302,44 @@ async def get_field_engineer_profile(
             "longitude": service_area.longitude if service_area else None
         },
 
+
+    
+        "services": [
+           {
+                "id": service.id,
+                "service_id": service.service_id,
+                "sub_service_id": service.sub_service_id,
+                "price": float(service.price) if service.price is not None else None
+            }
+            for service in services
+        ],
+        
+
+
+
+        "bank_details": {
+            "account_holder_name": bank_detail.account_holder_name if bank_detail else None,
+            "bank_name": bank_detail.bank_name if bank_detail else None,
+            "account_number": bank_detail.account_number if bank_detail else None,
+            "ifsc_code": bank_detail.ifsc_code if bank_detail else None,
+            "local_code": bank_detail.local_code if bank_detail else None,
+            "bank_address": bank_detail.bank_address if bank_detail else None,
+            "email_invoice_for_every_payout": (
+                bank_detail.email_invoice_for_every_payout
+                if bank_detail else False
+            )
+        },
+        
+
+
+
+
+
+
+
+
+
+
         "availability": [
             {
                 "day_of_week": item.day_of_week,
@@ -1336,6 +1356,8 @@ async def get_field_engineer_profile(
 async def update_field_engineer_profile(
     full_name: str = Form(None),
     date_of_birth: date = Form(None),
+    email: Optional[str] = Form(None),
+    
     gender: str = Form(None),
     is_associated_with_vendor: bool = Form(None),
     # vendor_id: Optional[int] = Form(None),
@@ -1347,6 +1369,19 @@ async def update_field_engineer_profile(
     vendor_id: Optional[int] = Form(None),
     years_of_experience_id: int = Form(None),
     primary_specialization_id: int = Form(None),
+    referral_code: Optional[str] = Form(None),
+    service_id: Optional[int] = Form(None),
+    sub_service_id: Optional[int] = Form(None),
+    price: Optional[float] = Form(None),
+    account_holder_name: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
+    confirm_account_number: Optional[str] = Form(None),
+    ifsc_code: Optional[str] = Form(None),
+    local_code: Optional[str] = Form(None),
+    bank_address: Optional[str] = Form(None),
+    email_invoice_for_every_payout: Optional[bool] = Form(None),
+    cancelled_cheque: UploadFile = File(None),
 
     # STEP 3 - SERVICE AREA
     primary_city: str = Form(None),
@@ -1359,7 +1394,8 @@ async def update_field_engineer_profile(
     day_of_week: int = Form(None),
     start_time: time = Form(None),
     end_time: time = Form(None),
-    is_available: bool = Form(True),
+    # is_available: bool = Form(True),
+    is_available: Optional[bool] = Form(None),
 
     profile_image: UploadFile = File(None),
     identity_proof: UploadFile = File(None),
@@ -1382,17 +1418,49 @@ async def update_field_engineer_profile(
             status_code=404,
             detail="Profile not found"
         )
+    
 
+    if email is not None:
+        user.email = email
     # ----------------------------
     # Update Profile
     # ----------------------------
-    profile.full_name = full_name
-    profile.date_of_birth = date_of_birth   
-    profile.gender = gender
-    profile.is_associated_with_vendor = is_associated_with_vendor
-    profile.vendor_id = vendor_id
-    profile.years_of_experience_id = years_of_experience_id
-    profile.primary_specialization_id = primary_specialization_id
+    # profile.full_name = full_name
+    # profile.date_of_birth = date_of_birth   
+    # profile.gender = gender
+    # profile.is_associated_with_vendor = is_associated_with_vendor
+    # profile.vendor_id = vendor_id
+    # profile.years_of_experience_id = years_of_experience_id
+    # profile.primary_specialization_id = primary_specialization_id
+
+
+
+    if full_name is not None:
+        profile.full_name = full_name
+
+    if date_of_birth is not None:
+        profile.date_of_birth = date_of_birth
+
+    if gender is not None:
+        profile.gender = gender
+
+    if is_associated_with_vendor is not None:
+        profile.is_associated_with_vendor = is_associated_with_vendor
+
+        if not is_associated_with_vendor:
+            profile.vendor_id = None
+        elif vendor_id is not None:
+           profile.vendor_id = vendor_id
+
+    if years_of_experience_id is not None:
+        profile.years_of_experience_id = years_of_experience_id
+
+    if primary_specialization_id is not None:
+        profile.primary_specialization_id = primary_specialization_id
+
+
+    if referral_code is not None:
+        profile.referral_code = referral_code
 
     if profile_image:
         profile.profile_image = save_upload_file(
@@ -1465,12 +1533,28 @@ async def update_field_engineer_profile(
         )
         db.add(service_area)
 
-    service_area.primary_city = primary_city
-    service_area.service_radius = service_radius
-    service_area.preferred_work_areas = preferred_work_areas
-    service_area.latitude = latitude
-    service_area.longitude = longitude
+    # service_area.primary_city = primary_city
+    # service_area.service_radius = service_radius
+    # service_area.preferred_work_areas = preferred_work_areas
+    # service_area.latitude = latitude
+    # service_area.longitude = longitude
+    
 
+
+    if primary_city is not None:
+        service_area.primary_city = primary_city
+
+    if service_radius is not None:
+        service_area.service_radius = service_radius
+
+    if preferred_work_areas is not None:
+        service_area.preferred_work_areas = preferred_work_areas
+
+    if latitude is not None:
+        service_area.latitude = latitude
+
+    if longitude is not None:
+        service_area.longitude = longitude
     # ----------------------------
     # Update Availability
     # ----------------------------
@@ -1487,11 +1571,23 @@ async def update_field_engineer_profile(
         )
         db.add(availability)
 
-    availability.day_of_week = day_of_week
-    availability.start_time = start_time
-    availability.end_time = end_time
-    availability.is_available = is_available
-    # ----------------------------
+    # availability.day_of_week = day_of_week
+    # availability.start_time = start_time
+    # availability.end_time = end_time
+    # availability.is_available = is_available
+
+    if day_of_week is not None:
+        availability.day_of_week = day_of_week
+
+    if start_time is not None:
+        availability.start_time = start_time
+
+    if end_time is not None:
+       availability.end_time = end_time
+
+    if is_available is not None:
+       availability.is_available = is_available
+    # # ----------------------------
     # Update Availability
     # ----------------------------
     # if payload.availability:
@@ -1512,13 +1608,116 @@ async def update_field_engineer_profile(
 
     #         db.add(availability)
 
+    
+    if service_id is not None and sub_service_id is not None and price is not None:
+        existing_service = db.query(FieldEngineerService).filter(
+           FieldEngineerService.field_engineer_id == profile.id,
+           FieldEngineerService.service_id == service_id,
+           FieldEngineerService.sub_service_id == sub_service_id
+        ).first()
+
+        if existing_service:
+            existing_service.price = price
+        else:
+            new_service = FieldEngineerService(
+               field_engineer_id=profile.id,
+               service_id=service_id,
+               sub_service_id=sub_service_id,
+               price=price
+            )
+            db.add(new_service)
+
+
+    if any([
+        account_holder_name is not None,
+        bank_name is not None,
+        account_number is not None,
+        ifsc_code is not None,
+        local_code is not None,
+        bank_address is not None,
+        email_invoice_for_every_payout is not None
+    ]):
+        
+    #   if account_number is not None and confirm_account_number is not None:
+    #     if account_number != confirm_account_number:
+    #         raise HTTPException(
+    #             status_code=400,
+    #             detail="Account number and confirm account number do not match"
+    #         )
+        if account_number is not None:
+            if confirm_account_number is None:
+                raise HTTPException(
+                   status_code=400,
+                   detail="confirm_account_number is required"
+                )
+
+            if account_number != confirm_account_number:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Account number and confirm account number do not match"
+                )
+
+    bank_detail = db.query(CustomerBankDetail).filter(
+        CustomerBankDetail.user_profile_id == profile.id
+    ).first()
+
+    if not bank_detail:
+        bank_detail = CustomerBankDetail(
+            user_profile_id=profile.id
+        )
+        db.add(bank_detail)
+
+    if account_holder_name is not None:
+        bank_detail.account_holder_name = account_holder_name
+
+    if bank_name is not None:
+        bank_detail.bank_name = bank_name
+
+    if account_number is not None:
+        bank_detail.account_number = account_number
+
+    if ifsc_code is not None:
+        bank_detail.ifsc_code = ifsc_code
+
+    if local_code is not None:
+        bank_detail.local_code = local_code
+
+    if bank_address is not None:
+        bank_detail.bank_address = bank_address
+
+    if email_invoice_for_every_payout is not None:
+        bank_detail.email_invoice_for_every_payout = (
+            email_invoice_for_every_payout
+        )
+    
+
+
     db.commit()
     db.refresh(profile)
 
+    # return {
+    #     "message": "Field Engineer profile updated successfully",
+    #     "profile_id": profile.id
+    # }
+
+
     return {
         "message": "Field Engineer profile updated successfully",
-        "profile_id": profile.id
+        "profile": {
+            "id": profile.id,
+            "full_name": profile.full_name,
+            "date_of_birth": profile.date_of_birth,
+            "gender": profile.gender,
+            "is_associated_with_vendor": profile.is_associated_with_vendor,
+            "vendor_id": profile.vendor_id,
+            "years_of_experience_id": profile.years_of_experience_id,
+            "primary_specialization_id": profile.primary_specialization_id,
+            "referral_code": profile.referral_code,
+            "profile_image": profile.profile_image,
+        }
     }
+    
+    
 
 # @router.post("/vendor/signin")
 # async def vendor_signin(
@@ -2854,24 +3053,23 @@ async def complete_customer_profile(
     identity_date_of_birth = get_text("identity_date_of_birth")
     identity_number = get_text("identity_number")
 
-    company = get_text("Company")
-    business_type = get_text("Business Type")
-    industry_type = get_text("Industry Type")
-    company_website = get_text("Company Website (Optional)")
-
-    office_address = get_text("Office Address")
-    city = get_text("City")
-    state = get_text("State")
-    pin_code = get_text("Enter PIN Code")
-
-    gst_number = get_text("GST Number")
-    tax_number = get_text("TAX Number")
-    billing_email = get_text("Billing Email")
-
-    authorized_full_name = get_text("Full Name")
-    designation = get_text("Designation")
-    work_phone_number = get_text("Phone Number")
-    work_email = get_text("Work Email")
+    company_name = get_text("company_name")
+    business_type = get_text("business_type")
+    industry = get_text("industry")
+    company_registration_number = get_text(
+        "company_registration_number"
+    )
+    office_address = get_text("office_address")
+    city = get_text("city")
+    state = get_text("state")
+    pincode = get_text("pincode")
+    gst_number = get_text("gst_number")
+    pan_number = get_text("pan_number")
+    billing_email = get_text("billing_email")
+    authorized_person_name = get_text("authorized_person_name")
+    designation = get_text("designation")
+    work_phone = get_text("work_phone")
+    work_email = get_text("work_email")
 
     account_holder_name = get_text("account_holder_name")
     bank_name = get_text("bank_name")
@@ -2883,13 +3081,6 @@ async def complete_customer_profile(
     email_invoice_for_every_payout = get_bool(
         "email_invoice_for_every_payout"
     )
-
-    # STEP 5 FORM DATA
-    cin_number = get_text("Enter CIN Number")
-    tax_number_step5 = get_text("Enter TAX Number")
-    gst_number_step5 = get_text("Enter GST Number")
-    document_number = get_text("Enter Document Number")
-    bank_account_number = get_text("Enter Bank Account Number")
 
     # -----------------------------
     # FILE FORM DATA
@@ -2912,8 +3103,11 @@ async def complete_customer_profile(
 
     moa_aoa = form.get("moa_aoa")
 
-    bank_account_proof = form.get("bank_account_proof")
-    cancelled_cheque = form.get("cancelled_cheque")
+    bank_statement = form.get("bank_statement")
+
+    identity_proof = form.get("identity_proof")
+
+    address_proof = form.get("address_proof")
 
     # -----------------------------
     # GET USER + PROFILE
@@ -2944,12 +3138,6 @@ async def complete_customer_profile(
 
     elif step == 2:
 
-        full_name = get_text("full_name")
-        email = get_text("email")
-
-        # Phone number comes from the logged-in user
-        phone_number = current_user_mobile
-
         if not full_name:
             raise HTTPException(
                 status_code=400,
@@ -2962,30 +3150,21 @@ async def complete_customer_profile(
                 detail="Email is required."
             )
 
-        # Check whether email already belongs to another user
-        existing_user = db.execute(
-            select(User).where(
-                User.email == email,
-                User.id != user.id
-            )
-        ).scalar_one_or_none()
-
-        if existing_user:
+        if not phone_number:
             raise HTTPException(
                 status_code=400,
-                detail="Email address is already registered."
+                detail="Phone number is required."
             )
 
-        # Update editable fields
         profile.full_name = full_name
         user.email = email
+        user.phone_number = phone_number
 
-        # DO NOT update phone number.
-        # phone_number is the number used to log in.
-        # current_user_mobile is only used to identify the logged-in user.
-
+        db.add(profile)
+        db.add(user)
         db.commit()
         db.refresh(profile)
+        db.refresh(user)
 
         message = "Step 2 completed successfully."
 
@@ -2994,21 +3173,6 @@ async def complete_customer_profile(
     # =========================================================
 
     elif step == 3:
-
-        # ---------------------------------------------------------
-        # STEP 3 FORM DATA
-        # ---------------------------------------------------------
-
-        identity_type = get_text("identity_type")
-        identity_full_name = get_text("identity_full_name")
-        identity_date_of_birth = get_text("identity_date_of_birth")
-        gender = get_text("gender")
-        identity_number = get_text("identity_number")
-        address_on_id = get_text("address_on_id")
-
-        # ---------------------------------------------------------
-        # REQUIRED VALIDATION
-        # ---------------------------------------------------------
 
         if not identity_type:
             raise HTTPException(
@@ -3028,12 +3192,6 @@ async def complete_customer_profile(
                 detail="Date of birth is required."
             )
 
-        if not gender:
-            raise HTTPException(
-                status_code=400,
-                detail="Gender is required."
-            )
-
         if not identity_number:
             raise HTTPException(
                 status_code=400,
@@ -3043,25 +3201,22 @@ async def complete_customer_profile(
         if front_image is None:
             raise HTTPException(
                 status_code=400,
-                detail="Front ID document is required."
+                detail="front_image is required."
             )
 
         if not getattr(front_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="Front ID document must be a valid uploaded file."
+                detail="front_image must be a valid uploaded file."
             )
 
         if back_image is not None and not getattr(back_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="Back ID document must be a valid uploaded file."
+                detail="back_image must be a valid uploaded file."
             )
 
-        # ---------------------------------------------------------
-        # PARSE DATE OF BIRTH
-        # ---------------------------------------------------------
-
+        # Parse DOB
         try:
             parsed_dob = date.fromisoformat(
                 identity_date_of_birth
@@ -3071,10 +3226,6 @@ async def complete_customer_profile(
                 status_code=400,
                 detail="identity_date_of_birth must be in YYYY-MM-DD format."
             )
-
-        # ---------------------------------------------------------
-        # GET OR CREATE CUSTOMER IDENTITY
-        # ---------------------------------------------------------
 
         identity = db.execute(
             select(CustomerIdentity).where(
@@ -3088,31 +3239,16 @@ async def complete_customer_profile(
             )
             db.add(identity)
 
-        # ---------------------------------------------------------
-        # SAVE IDENTITY INFORMATION
-        # ---------------------------------------------------------
-
         identity.identity_type = identity_type
         identity.identity_full_name = identity_full_name
         identity.date_of_birth = parsed_dob
         identity.identity_number = identity_number
-        identity.address_on_id = address_on_id
 
-        # Gender belongs to UserProfile
-        profile.gender = gender
-
-        # ---------------------------------------------------------
-        # SAVE FRONT ID DOCUMENT
-        # ---------------------------------------------------------
-
+        # Save actual uploaded files
         identity.front_image = await save_customer_uploaded_file(
             front_image,
             front_image.filename
         )
-
-        # ---------------------------------------------------------
-        # SAVE BACK ID DOCUMENT IF PROVIDED
-        # ---------------------------------------------------------
 
         if back_image:
             identity.back_image = await save_customer_uploaded_file(
@@ -3120,16 +3256,7 @@ async def complete_customer_profile(
                 back_image.filename
             )
 
-        # ---------------------------------------------------------
-        # SAVE
-        # ---------------------------------------------------------
-
-        db.add(profile)
-        db.add(identity)
-
         db.commit()
-
-        db.refresh(profile)
         db.refresh(identity)
 
         message = "Step 3 completed successfully."
@@ -3141,20 +3268,20 @@ async def complete_customer_profile(
     elif step == 4:
 
         business_values = [
-            company,
+            company_name,
             business_type,
-            industry_type,
-            company_website,
+            industry,
+            company_registration_number,
             office_address,
             city,
             state,
-            pin_code,
+            pincode,
             gst_number,
-            tax_number,
+            pan_number,
             billing_email,
-            authorized_full_name,
+            authorized_person_name,
             designation,
-            work_phone_number,
+            work_phone,
             work_email
         ]
 
@@ -3163,43 +3290,32 @@ async def complete_customer_profile(
             for value in business_values
         )
 
-        # ---------------------------------------------------------
-        # INDIVIDUAL
-        # ---------------------------------------------------------
-
         if not has_business_data:
 
-            # User is continuing as an individual.
-            # Business information is optional and can be added later.
             profile.customer_type = "individual"
-
-            db.add(profile)
-            db.commit()
-            db.refresh(profile)
-
-            message = "Step 4 completed successfully."
-
-        # ---------------------------------------------------------
-        # BUSINESS INFORMATION
-        # ---------------------------------------------------------
 
         else:
 
+            profile.customer_type = "business"
+
             required_business_fields = {
-                "Company": company,
-                "Business Type": business_type,
-                "Industry Type": industry_type,
-                "Office Address": office_address,
-                "City": city,
-                "State": state,
-                "Enter PIN Code": pin_code,
-                "GST Number": gst_number,
-                "TAX Number": tax_number,
-                "Billing Email": billing_email,
-                "Full Name": authorized_full_name,
-                "Designation": designation,
-                "Phone Number": work_phone_number,
-                "Work Email": work_email
+                "company_name": company_name,
+                "business_type": business_type,
+                "industry": industry,
+                "company_registration_number":
+                    company_registration_number,
+                "office_address": office_address,
+                "city": city,
+                "state": state,
+                "pincode": pincode,
+                "gst_number": gst_number,
+                "pan_number": pan_number,
+                "billing_email": billing_email,
+                "authorized_person_name":
+                    authorized_person_name,
+                "designation": designation,
+                "work_phone": work_phone,
+                "work_email": work_email
             }
 
             missing_fields = [
@@ -3217,10 +3333,6 @@ async def complete_customer_profile(
                     }
                 )
 
-            # ---------------------------------------------------------
-            # GET OR CREATE BUSINESS INFORMATION
-            # ---------------------------------------------------------
-
             business = db.execute(
                 select(CustomerBusiness).where(
                     CustomerBusiness.user_profile_id == profile.id
@@ -3233,44 +3345,29 @@ async def complete_customer_profile(
                 )
                 db.add(business)
 
-            # ---------------------------------------------------------
-            # SAVE BUSINESS INFORMATION
-            # ---------------------------------------------------------
-
-            business.company_name = company
+            business.company_name = company_name
             business.business_type = business_type
-            business.industry = industry_type
-            business.website = company_website
+            business.industry = industry
+            business.company_registration_number = (
+                company_registration_number
+            )
             business.office_address = office_address
             business.city = city
             business.state = state
-            business.pincode = pin_code
+            business.pincode = pincode
             business.gst_number = gst_number
-            business.tax_number = tax_number
+            business.pan_number = pan_number
             business.billing_email = billing_email
-            business.authorized_person_name = authorized_full_name
+            business.authorized_person_name = (
+                authorized_person_name
+            )
             business.designation = designation
-            business.work_phone = work_phone_number
+            business.work_phone = work_phone
             business.work_email = work_email
 
-            # IMPORTANT:
-            # Do NOT change profile.customer_type here.
-            #
-            # If the user originally selected "individual",
-            # they can still have business information.
-            #
-            # customer_type represents the registration/UI choice,
-            # while CustomerBusiness stores optional company information.
+        db.commit()
 
-            db.add(profile)
-            db.add(business)
-
-            db.commit()
-
-            db.refresh(profile)
-            db.refresh(business)
-
-            message = "Step 4 completed successfully."
+        message = "Step 4 completed successfully."
 
     # =========================================================
     # STEP 5
@@ -3290,86 +3387,34 @@ async def complete_customer_profile(
             )
             db.add(documents)
 
-        # ---------------------------------------------------------
-        # INDIVIDUAL CUSTOMER
-        # ---------------------------------------------------------
+        if profile.customer_type == "business":
 
-        if profile.customer_type == "individual":
-
-            if not tax_identification_card:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Tax Identification Card is required."
-                )
-
-            if not tax_number_step5:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Enter TAX Number is required."
-                )
-
-            documents.tax_identification_card = (
-                await save_customer_uploaded_file(
+            required_documents = {
+                "company_registration_certificate":
+                    company_registration_certificate,
+                "tax_identification_card":
                     tax_identification_card,
-                    tax_identification_card.filename
-                )
-            )
+                "gst_certificate":
+                    gst_certificate,
+                "moa_aoa":
+                    moa_aoa,
+                "bank_statement":
+                    bank_statement
+            }
 
-            documents.tax_number = tax_number_step5
+            missing_documents = [
+                name
+                for name, file in required_documents.items()
+                if not file
+            ]
 
-            # Optional Bank Account Proof
-            if bank_account_proof:
-                documents.bank_account_proof = (
-                    await save_customer_uploaded_file(
-                        bank_account_proof,
-                        bank_account_proof.filename
-                    )
-                )
-
-            # Optional Bank Account Number
-            if bank_account_number:
-                documents.bank_account_number = bank_account_number
-
-        # ---------------------------------------------------------
-        # BUSINESS CUSTOMER
-        # ---------------------------------------------------------
-
-        else:
-
-            if not company_registration_certificate:
+            if missing_documents:
                 raise HTTPException(
                     status_code=400,
-                    detail="Company Registration Document is required."
-                )
-
-            if not cin_number:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Enter CIN Number is required."
-                )
-
-            if not tax_identification_card:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Tax Identification Document is required."
-                )
-
-            if not tax_number_step5:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Enter TAX Number is required."
-                )
-
-            if not gst_certificate:
-                raise HTTPException(
-                    status_code=400,
-                    detail="GST or SST Documents is required."
-                )
-
-            if not gst_number_step5:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Enter GST Number is required."
+                    detail={
+                        "message": "Required business documents are missing.",
+                        "missing_documents": missing_documents
+                    }
                 )
 
             documents.company_registration_certificate = (
@@ -3379,16 +3424,12 @@ async def complete_customer_profile(
                 )
             )
 
-            documents.cin_number = cin_number
-
             documents.tax_identification_card = (
                 await save_customer_uploaded_file(
                     tax_identification_card,
                     tax_identification_card.filename
                 )
             )
-
-            documents.tax_number = tax_number_step5
 
             documents.gst_certificate = (
                 await save_customer_uploaded_file(
@@ -3397,31 +3438,48 @@ async def complete_customer_profile(
                 )
             )
 
-            documents.gst_number = gst_number_step5
+            documents.moa_aoa = (
+                await save_customer_uploaded_file(
+                    moa_aoa,
+                    moa_aoa.filename
+                )
+            )
 
-            # Optional MOA / AOA
-            if moa_aoa:
-                documents.moa_aoa = (
-                    await save_customer_uploaded_file(
-                        moa_aoa,
-                        moa_aoa.filename
-                    )
+            # bank_statement → bank_account_proof
+            documents.bank_account_proof = (
+                await save_customer_uploaded_file(
+                    bank_statement,
+                    bank_statement.filename
+                )
+            )
+
+        else:
+
+            if not identity_proof:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Identity proof is required."
                 )
 
-                if document_number:
-                    documents.document_number = document_number
-
-            # Optional Bank Account Proof
-            if bank_account_proof:
-                documents.bank_account_proof = (
-                    await save_customer_uploaded_file(
-                        bank_account_proof,
-                        bank_account_proof.filename
-                    )
+            if not address_proof:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Address proof is required."
                 )
 
-                if bank_account_number:
-                    documents.bank_account_number = bank_account_number
+            documents.identity_proof = (
+                await save_customer_uploaded_file(
+                    identity_proof,
+                    identity_proof.filename
+                )
+            )
+
+            documents.address_proof = (
+                await save_customer_uploaded_file(
+                    address_proof,
+                    address_proof.filename
+                )
+            )
 
         db.commit()
         db.refresh(documents)
@@ -3476,26 +3534,9 @@ async def complete_customer_profile(
         bank.ifsc_code = ifsc_code
         bank.local_code = local_code
         bank.bank_address = bank_address
-
         bank.email_invoice_for_every_payout = (
             email_invoice_for_every_payout
         )
-
-        # ---------------------------------------------------------
-        # OPTIONAL CANCELLED CHEQUE
-        # ---------------------------------------------------------
-
-        if cancelled_cheque:
-            if not getattr(cancelled_cheque, "filename", None):
-                raise HTTPException(
-                    status_code=400,
-                    detail="cancelled_cheque must be a valid uploaded file."
-                )
-
-            bank.cancelled_cheque = await save_customer_uploaded_file(
-                cancelled_cheque,
-                cancelled_cheque.filename
-            )
 
         db.commit()
         db.refresh(bank)
@@ -3562,9 +3603,7 @@ def calculate_customer_completion(
     # STEP 1 - PHONE VERIFIED
     # =========================================================
 
-    step1_completed = bool(
-        user and user.is_verified
-    )
+    step1_completed = bool(user.is_verified)
 
     if step1_completed:
         completed_steps += 1
@@ -3573,12 +3612,9 @@ def calculate_customer_completion(
     # STEP 2 - BASIC INFORMATION
     # =========================================================
 
-    # Phone number is the login phone number stored on User.
-    # It is not editable in Step 2.
     step2_completed = bool(
         profile
         and profile.full_name
-        and user
         and user.email
         and user.phone_number
     )
@@ -3595,22 +3631,18 @@ def calculate_customer_completion(
         and identity.identity_type
         and identity.identity_full_name
         and identity.date_of_birth
-        and profile
-        and profile.gender
         and identity.identity_number
-        and identity.front_image
     )
 
     if step3_completed:
         completed_steps += 1
 
     # =========================================================
-    # STEP 4 - BUSINESS / INDIVIDUAL
+    # STEP 4 - BUSINESS INFORMATION
     # =========================================================
 
     if profile and profile.customer_type == "individual":
 
-        # Individual customers skip business details.
         step4_completed = True
 
     elif profile and profile.customer_type == "business":
@@ -3620,12 +3652,13 @@ def calculate_customer_completion(
             and business.company_name
             and business.business_type
             and business.industry
-            and business.office_address
+            and business.company_registration_number
+            and business.gst_number
             and business.city
             and business.state
             and business.pincode
-            and business.gst_number
-            and business.tax_number
+            and business.office_address
+            and business.pan_number
             and business.billing_email
             and business.authorized_person_name
             and business.designation
@@ -3647,8 +3680,8 @@ def calculate_customer_completion(
 
         step5_completed = bool(
             documents
-            and documents.tax_identification_card
-            and documents.tax_number
+            and documents.identity_proof
+            and documents.address_proof
         )
 
     elif profile and profile.customer_type == "business":
@@ -3656,11 +3689,10 @@ def calculate_customer_completion(
         step5_completed = bool(
             documents
             and documents.company_registration_certificate
-            and documents.cin_number
             and documents.tax_identification_card
-            and documents.tax_number
             and documents.gst_certificate
-            and documents.gst_number
+            and documents.moa_aoa
+            and documents.bank_account_proof
         )
 
     else:
@@ -3681,6 +3713,8 @@ def calculate_customer_completion(
         and bank.ifsc_code
         and bank.local_code
         and bank.bank_address
+        and documents
+        and documents.bank_account_proof
     )
 
     if step6_completed:
@@ -3709,6 +3743,7 @@ def calculate_customer_completion(
             "step_6": step6_completed
         }
     }
+
 
 
 @router.get("/customer/profile")
