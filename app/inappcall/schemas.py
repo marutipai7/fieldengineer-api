@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Create one-to-one call
@@ -67,6 +67,18 @@ class CallResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    participants: List[CallParticipantResponse] = []
+    participants: List[CallParticipantResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+# FCM token registration
+class FCMTokenRequest(BaseModel):
+    token: str = Field(alias="fcm_token")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    
+class FCMTokenResponse(BaseModel):
+    message: str
+    token: str

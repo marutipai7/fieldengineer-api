@@ -4,18 +4,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.inappcall import service
+from app.inappcall.firebase import (
+    save_fcm_token as store_fcm_token,
+    send_push_notification,
+)
 from app.inappcall.models import CallStatus, CallType
+from app.inappcall.utils import send_incoming_call_notification
 from app.inappcall.schemas import (
     CallCreate,
     CallParticipantCreate,
     CallResponse,
     CallStatusUpdate,
+    FCMTokenRequest,
+    FCMTokenResponse,
     GroupCallCreate,
 )
-from app.core.database import get_db, get_redis
-from app.utils.auth_utils import get_current_user_object
-from app.notifications.service import NotificationService
-from app.notifications.schemas import NotificationCreate, NotificationType
+from app.core.database import get_db
+from app.utils.auth_utils import (
+    check_authorization_key,
+    get_current_user_object,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,66 +51,7 @@ async def create_call(
         notes=data.notes,
     )
 
-    try:
-        redis_client = await get_redis()
-
-        notification_title = "Incoming Call"
-        notification_message = (
-            f"You have an incoming {call.call_type.value} call"
-        )
-        notification_type = NotificationType.INCOMING_CALL
-        entity_type = "call"
-        entity_id = call.id
-
-        await NotificationService.create_notification(
-            db=db,
-            redis_client=redis_client,
-            data=NotificationCreate(
-                user_id=call.receiver_id,
-                title=notification_title,
-                message=notification_message,
-                notification_type=notification_type,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                metadata={
-                    "auto_generated": True,
-                    "call_id": call.id,
-                    "room_id": call.room_id,
-                    "join_url": call.join_url,
-                    "caller_id": call.caller_id,
-                },
-            ),
-        )
-
-        try:
-            logger.info(
-                f"🔥 About to send FCM notification "
-                f"to user_id={call.receiver_id}"
-            )
-            fcm_result = await NotificationService.send_push_notification(
-                db=db,
-                user_id=call.receiver_id,
-                title=notification_title,
-                body=notification_message,
-                data={
-                    "notification_type": notification_type.value,
-                    "entity_type": entity_type,
-                    "entity_id": str(entity_id or ""),
-                },
-            )
-            logger.info(f"🔥 FCM send result: {fcm_result}")
-        except Exception as exc:
-            logger.exception(
-                "FCM call notification failed (non-blocking) "
-                "for user_id=%s: %s",
-                call.receiver_id,
-                exc,
-            )
-
-    except Exception as exc:
-        logger.error(
-            f"Failed to create call notification: {exc}"
-        )
+    send_incoming_call_notification(db=db, call=call)
 
     return call
 
@@ -117,15 +66,13 @@ def create_group_call(
     current_user: dict = Depends(get_current_user_object),
     db: Session = Depends(get_db),
 ):
-    call = service.create_group_call(
+    return service.create_group_call(
         db=db,
         caller_id=current_user[0].id,
         participant_ids=data.participant_ids,
         call_type=CallType(data.call_type),
         notes=data.notes,
     )
-
-    return call
 
 
 @router.post(
@@ -137,21 +84,16 @@ def add_participant(
     current_user: dict = Depends(get_current_user_object),
     db: Session = Depends(get_db),
 ):
-    call = service.get_call(db, call_id)
-
-    if not call:
-        raise HTTPException(
-            status_code=404,
-            detail="Call not found",
+    if call := service.get_call(db, call_id):
+        return service.add_participant(
+            db=db,
+            call_id=call_id,
+            user_id=data.user_id,
         )
-
-    participant = service.add_participant(
-        db=db,
-        call_id=call_id,
-        user_id=data.user_id,
+    raise HTTPException(
+        status_code=404,
+        detail="Call not found",
     )
-
-    return participant
 
 
 @router.patch(
@@ -166,11 +108,11 @@ def update_call_status(
 ):
     try:
         call_status = CallStatus(data.status)
-    except ValueError:
+    except ValueError as e:
         raise HTTPException(
             status_code=400,
             detail="Invalid call status",
-        )
+        )from e
 
     call = service.update_call_status(
         db=db,
@@ -185,7 +127,46 @@ def update_call_status(
         )
 
     return call
+@router.post(
+    "/fcm-token",
+    response_model=FCMTokenResponse,
+)
+async def save_fcm_token(
+    request: FCMTokenRequest,
+    db: Session = Depends(get_db),
+    _auth=Depends(check_authorization_key),
+    current_user=Depends(get_current_user_object),
+):
+    user, _ = current_user
 
+    store_fcm_token(db=db, user_id=user.id, token=request.token)
+    return FCMTokenResponse(
+        message="FCM token saved successfully.",
+        token=request.token,
+    )
+    
+@router.post("/test-push")
+async def test_push_notification(
+    db: Session = Depends(get_db),
+    _auth=Depends(check_authorization_key),
+    current_user=Depends(get_current_user_object),
+):
+    user, _ = current_user
+
+    success = send_push_notification(
+        db=db,
+        user_id=user.id,
+        title="FCM Test",
+        body="Hello from Backend 🚀",
+        data={
+            "type": "test",
+            "screen": "home",
+        },
+    )
+
+    return {
+        "success": success,
+    }
 
 @router.get(
     "/{call_id}",
