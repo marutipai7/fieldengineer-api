@@ -234,59 +234,108 @@ def send_message(
     mime_type = None
     attachment_size = None
 
-    # Physical file path
     saved_file_path = None
 
     # --------------------------------------------------------
-    # Handle attachment
+    # Handle attachment ONLY if file exists
     # --------------------------------------------------------
-    mime_type = file.content_type or "" if file else None
 
-    original_filename = file.filename or "attachment"
-    extension = Path(original_filename).suffix.lower()
+    if file:
 
-    # Detect file type
-    if mime_type.startswith("image/") or extension in {
-        ".jpg", ".jpeg", ".png", ".gif", ".webp"
-    }:
-        message_type = "image"
+        mime_type = file.content_type or ""
 
-    elif mime_type.startswith("video/") or extension in {
-        ".mp4", ".mov", ".avi", ".mkv", ".webm"
-    }:
-        message_type = "video"
+        original_filename = file.filename or "attachment"
 
-    elif mime_type == "application/pdf" or extension == ".pdf":
-        message_type = "document"
+        extension = Path(
+            original_filename
+        ).suffix.lower()
 
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported file type"
+        # Detect file type
+        if (
+            mime_type.startswith("image/")
+            or extension in {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp"
+            }
+        ):
+            message_type = "image"
+
+        elif (
+            mime_type.startswith("video/")
+            or extension in {
+                ".mp4",
+                ".mov",
+                ".avi",
+                ".mkv",
+                ".webm"
+            }
+        ):
+            message_type = "video"
+
+        elif (
+            mime_type == "application/pdf"
+            or extension == ".pdf"
+        ):
+            message_type = "document"
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type"
+            )
+
+        # ----------------------------------------------------
+        # Create upload directory
+        # ----------------------------------------------------
+
+        upload_dir = (
+            UPLOADS_DIR
+            / "chat"
+            / str(chat_session_id)
         )
 
-    upload_dir = UPLOADS_DIR / "chat" / str(chat_session_id)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+        upload_dir.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
-    extension = Path(original_filename).suffix
-    filename = f"{uuid.uuid4().hex}{extension}"
+        filename = (
+            f"{uuid.uuid4().hex}{extension}"
+        )
 
-    saved_file_path = upload_dir / filename
+        saved_file_path = (
+            upload_dir / filename
+        )
 
-    # IMPORTANT: synchronous read
-    file_content = file.file.read()
+        # ----------------------------------------------------
+        # Save file
+        # ----------------------------------------------------
 
-    with open(saved_file_path, "wb") as buffer:
-        buffer.write(file_content)
+        file_content = file.file.read()
 
-    # URL that can be opened in browser
-    attachment_path = (
-        str(request.base_url).rstrip("/")
-        + f"/uploads/chat/{chat_session_id}/{filename}"
-    )
+        with open(
+            saved_file_path,
+            "wb"
+        ) as buffer:
+            buffer.write(file_content)
 
-    attachment_name = original_filename
-    attachment_size = saved_file_path.stat().st_size
+        # ----------------------------------------------------
+        # Create public URL
+        # ----------------------------------------------------
+
+        attachment_path = (
+            str(request.base_url).rstrip("/")
+            + f"/uploads/chat/{chat_session_id}/{filename}"
+        )
+
+        attachment_name = original_filename
+
+        attachment_size = (
+            saved_file_path.stat().st_size
+        )
 
     # --------------------------------------------------------
     # Create chat message
@@ -314,7 +363,6 @@ def send_message(
 
         db.add(chat_message)
 
-        # Update chat session timestamp
         chat.updated_at = datetime.utcnow()
 
         db.commit()
@@ -346,7 +394,19 @@ def send_message(
     # Return response
     # --------------------------------------------------------
 
-    return chat_message
+    return ChatHistoryResponse(
+    id=chat_message.id,
+    chat_session_id=chat_message.chat_session_id,
+    sender_id=chat_message.sender_id,
+    is_mine=(chat_message.sender_id == user.id),
+    message=chat_message.message,
+    message_type=chat_message.message_type,
+    attachment_path=chat_message.attachment_path,
+    attachment_name=chat_message.attachment_name,
+    mime_type=chat_message.mime_type,
+    attachment_size=chat_message.attachment_size,
+    created_at=chat_message.created_at,
+)
 
 
 # ============================================================
@@ -367,7 +427,10 @@ def get_chat_history(
     current_user_id = user.id
     other_user_id = user_id
 
+    # --------------------------------------------------------
     # Cannot chat with yourself
+    # --------------------------------------------------------
+
     if current_user_id == other_user_id:
         raise HTTPException(
             status_code=400,
@@ -410,13 +473,34 @@ def get_chat_history(
     # Get messages
     # --------------------------------------------------------
 
-    return (
-    db.query(ChatHistory)
-    .filter(
-        ChatHistory.chat_session_id == chat_session.id
+    messages = (
+        db.query(ChatHistory)
+        .filter(
+            ChatHistory.chat_session_id == chat_session.id
+        )
+        .order_by(
+            ChatHistory.created_at.asc()
+        )
+        .all()
     )
-    .order_by(
-        ChatHistory.created_at.asc()
+
+    # --------------------------------------------------------
+    # Return chat history
+    # --------------------------------------------------------
+
+    return [
+    ChatHistoryResponse(
+        id=message.id,
+        chat_session_id=message.chat_session_id,
+        sender_id=message.sender_id,
+        is_mine=(message.sender_id == user.id),
+        message=message.message,
+        message_type=message.message_type,
+        attachment_path=message.attachment_path,
+        attachment_name=message.attachment_name,
+        mime_type=message.mime_type,
+        attachment_size=message.attachment_size,
+        created_at=message.created_at,
     )
-    .all()
-)
+    for message in messages
+]
