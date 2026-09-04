@@ -29,7 +29,8 @@ from app.utils.auth_utils import (
     check_authorization_key,
     get_current_user_object,
 )
-
+from app.notifications.models import NotificationPreferences
+from app.notifications.schemas import NotificationPreferencesResponse
 
 logger = logging.getLogger(__name__)
 
@@ -148,46 +149,190 @@ async def websocket_endpoint(
 # ============================================================================
 
 @router.get(
-    "/",
-    response_model=list[NotificationResponse],
+    "",
+    response_model=NotificationPreferencesResponse,
 )
-def get_notifications(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    filter_type: str = Query(
-        "all",
-        pattern="^(all|unread|bidding)$",
-    ),
+def get_notification_preferences(
     db: Session = Depends(get_db),
     _auth=Depends(check_authorization_key),
     current_user=Depends(get_current_user_object),
 ):
     user, _ = current_user
 
-    query = (
-        db.query(Notification)
-        .filter(Notification.user_id == user.id)
+    preferences = (
+        db.query(NotificationPreferences)
+        .filter(
+            NotificationPreferences.user_id == user.id
+        )
+        .first()
     )
 
-    if filter_type == "unread":
-        query = query.filter(
-            Notification.is_read.is_(False)
+    if not preferences:
+        preferences = NotificationPreferences(
+            user_id=user.id
         )
 
-    elif filter_type == "bidding":
-        query = query.filter(
-            Notification.notification_type == "bid_received"
-        )
+        db.add(preferences)
+        db.commit()
+        db.refresh(preferences)
 
-    return (
-        query
-        .order_by(desc(Notification.created_at))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    return {
+    "success": True,
+    "message": "Notification preferences fetched successfully",
+    "data": {
+        "all": [
+            {
+                "key": "priority_jobs",
+                "title": "Priority Jobs",
+                "short_text": "Get notified when a priority job is available",
+                "enabled": preferences.all_priority_jobs,
+                "time": "10:30 AM",
+            },
+            {
+                "key": "new_job_requests",
+                "title": "New Job Requests",
+                "short_text": "Get notified when a new job request is received",
+                "enabled": preferences.all_new_job_requests,
+                "time": "10:25 AM",
+            },
+            {
+                "key": "job_assigned",
+                "title": "Job Assigned",
+                "short_text": "Get notified when a job is assigned to you",
+                "enabled": preferences.all_job_assigned,
+                "time": "10:15 AM",
+            },
+            {
+                "key": "job_reminders",
+                "title": "Job Reminders",
+                "short_text": "Get reminders about your upcoming jobs",
+                "enabled": preferences.all_job_reminders,
+                "time": "10:05 AM",
+            },
+            {
+                "key": "job_updates",
+                "title": "Job Updates",
+                "short_text": "Get notified when your job is updated",
+                "enabled": preferences.all_job_updates,
+                "time": "09:55 AM",
+            },
+            {
+                "key": "chat_messages",
+                "title": "Chat Messages",
+                "short_text": "Get notified when you receive a new message",
+                "enabled": preferences.all_chat_messages,
+                "time": "09:45 AM",
+            },
+            {
+                "key": "missed_messages_reminder",
+                "title": "Missed Messages",
+                "short_text": "Get reminders about messages you missed",
+                "enabled": preferences.all_missed_messages_reminder,
+                "time": "09:35 AM",
+            },
+            {
+                "key": "payment_received",
+                "title": "Payment Received",
+                "short_text": "Get notified when a payment is received",
+                "enabled": preferences.all_payment_received,
+                "time": "09:25 AM",
+            },
+            {
+                "key": "payout_updates",
+                "title": "Payout Updates",
+                "short_text": "Get notified about payout updates",
+                "enabled": preferences.all_payout_updates,
+                "time": "09:15 AM",
+            },
+            {
+                "key": "app_updates",
+                "title": "App Updates",
+                "short_text": "Get notified about important app updates",
+                "enabled": preferences.all_app_updates,
+                "time": "09:05 AM",
+            },
+            {
+                "key": "maintenance_alerts",
+                "title": "Maintenance Alerts",
+                "short_text": "Get notified about scheduled maintenance",
+                "enabled": preferences.all_maintenance_alerts,
+                "time": "08:55 AM",
+            },
+        ],
 
+        "bookings": [
+            {
+                "key": "new_job_requests",
+                "title": "New Job Requests",
+                "short_text": "Get notified about new booking requests",
+                "enabled": preferences.booking_new_job_requests,
+                "time": "08:45 AM",
+            },
+            {
+                "key": "job_assigned",
+                "title": "Job Assigned",
+                "short_text": "Get notified when a booking is assigned",
+                "enabled": preferences.booking_job_assigned,
+                "time": "08:35 AM",
+            },
+            {
+                "key": "job_reminders",
+                "title": "Job Reminders",
+                "short_text": "Get reminders about your bookings",
+                "enabled": preferences.booking_job_reminders,
+                "time": "08:25 AM",
+            },
+            {
+                "key": "job_updates",
+                "title": "Job Updates",
+                "short_text": "Get notified when a booking is updated",
+                "enabled": preferences.booking_job_updates,
+                "time": "08:15 AM",
+            },
+        ],
 
+        "engineer": [
+            {
+                "key": "priority_jobs",
+                "title": "Priority Jobs",
+                "short_text": "Get notified about priority engineer jobs",
+                "enabled": preferences.engineer_priority_jobs,
+                "time": "08:05 AM",
+            },
+            {
+                "key": "job_assigned",
+                "title": "Job Assigned",
+                "short_text": "Get notified when a job is assigned to you",
+                "enabled": preferences.engineer_job_assigned,
+                "time": "07:55 AM",
+            },
+            {
+                "key": "job_updates",
+                "title": "Job Updates",
+                "short_text": "Get notified when your engineer job is updated",
+                "enabled": preferences.engineer_job_updates,
+                "time": "07:45 AM",
+            },
+        ],
+
+        "communication": [
+            {
+                "key": "chat_messages",
+                "title": "Chat Messages",
+                "short_text": "Get notified when you receive a new message",
+                "enabled": preferences.communication_chat_messages,
+                "time": "07:35 AM",
+            },
+            {
+                "key": "missed_messages_reminder",
+                "title": "Missed Messages",
+                "short_text": "Get reminded about messages you missed",
+                "enabled": preferences.communication_missed_messages_reminder,
+                "time": "07:25 AM",
+            },
+        ],
+    },
+}
 # @router.post(
 #     "/fcm-token",
 #     response_model=FCMTokenResponse,

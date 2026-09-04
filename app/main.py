@@ -30,8 +30,8 @@ from app.fieldengineer.work_preferences import router as work_preference_router
 #     ws_router as notification_ws_router,
 # )
 
-from app.notifications.routes import router as notification_router
-
+#from app.notifications.routes import router as notification_router
+from app.notifications.routers import router as notification_router
 from app.fieldengineer.services import router as field_engineer_router
 import redis.asyncio as redis
 from app.notifications.redis_listener import start_notification_listener

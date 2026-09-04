@@ -91,3 +91,22 @@ class FCMTokenResponse(BaseModel):
 
     success: bool
     message: str
+class NotificationPreferenceItem(BaseModel):
+    key: str
+    title: str
+    short_text: str
+    enabled: bool
+    time: str
+
+
+class NotificationPreferencesData(BaseModel):
+    all: list[NotificationPreferenceItem]
+    bookings: list[NotificationPreferenceItem]
+    engineer: list[NotificationPreferenceItem]
+    communication: list[NotificationPreferenceItem]
+
+
+class NotificationPreferencesResponse(BaseModel):
+    success: bool
+    message: str
+    data: NotificationPreferencesData
