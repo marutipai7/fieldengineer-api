@@ -640,6 +640,7 @@ async def get_customer_offer_details(
     current_user_mobile: str = Depends(get_current_user_mobile),
     db: Session = Depends(get_db)
 ):
+    # 1. Find logged-in customer
     user = db.execute(
         select(User).where(
             User.mobile_number == current_user_mobile
@@ -652,6 +653,7 @@ async def get_customer_offer_details(
             detail="User not found"
         )
 
+    # 2. Find customer's booking
     booking = db.execute(
         select(Booking).where(
             Booking.id == booking_id,
@@ -665,19 +667,28 @@ async def get_customer_offer_details(
             detail="Booking not found"
         )
 
-    # ------------------------------------------------------------------
-    # Offer / accepted field engineer
-    # ------------------------------------------------------------------
-    # A booking may not have an accepted field engineer yet (the lead is
-    # still open). Instead of failing with an error, return the booking
-    # metadata with empty offer fields (has_offer=False) so the customer
-    # booking screen can render a graceful "no offer yet" state.
-    # ------------------------------------------------------------------
+    # 3. Get service
+    service = db.execute(
+        select(Service).where(
+            Service.id == booking.service_id
+        )
+    ).scalars().first()
+
+    # 4. Get sub-service
+    sub_service = db.execute(
+        select(SubService).where(
+            SubService.id == booking.sub_service_id
+        )
+    ).scalars().first()
+
+    # 5. Default: no engineer / no offer yet
     accepted_field_engineer = None
     offer_price = None
-    has_offer = booking.accepted_field_engineer_id is not None
+    has_offer = False
 
+    # 6. If engineer has been assigned, get engineer + price
     if booking.accepted_field_engineer_id is not None:
+
         accepted_profile = db.execute(
             select(UserProfile).where(
                 UserProfile.id == booking.accepted_field_engineer_id
@@ -685,6 +696,7 @@ async def get_customer_offer_details(
         ).scalars().first()
 
         if accepted_profile:
+
             accepted_user = db.execute(
                 select(User).where(
                     User.id == accepted_profile.user_id
@@ -695,43 +707,42 @@ async def get_customer_offer_details(
                 select(FieldEngineerService).where(
                     FieldEngineerService.field_engineer_id == accepted_profile.id,
                     FieldEngineerService.service_id == booking.service_id,
-                    FieldEngineerService.sub_service_id == booking.sub_service_id,
+                    FieldEngineerService.sub_service_id == booking.sub_service_id
                 )
             ).scalars().first()
 
-            if engineer_service and engineer_service.price is not None:
+            if engineer_service:
                 offer_price = float(engineer_service.price)
+                has_offer = True
 
             accepted_field_engineer = {
                 "id": accepted_profile.id,
                 "user_id": accepted_profile.user_id,
                 "full_name": accepted_profile.full_name,
-                "mobile_number": accepted_user.mobile_number if accepted_user else None,
+                "mobile_number": (
+                    accepted_user.mobile_number
+                    if accepted_user else None
+                ),
                 "profile_image": accepted_profile.profile_image,
                 "work_preference": accepted_profile.work_preference,
             }
 
-    service = db.execute(
-        select(Service).where(
-            Service.id == booking.service_id
-        )
-    ).scalars().first()
-
-    sub_service = db.execute(
-        select(SubService).where(
-            SubService.id == booking.sub_service_id
-        )
-    ).scalars().first()
-
+    # 7. Return offer details
     return OfferDetailsResponse(
         booking_id=booking.id,
         booking_number=booking.booking_number,
         service_name=service.service_name if service else None,
-        sub_service_name=sub_service.sub_service_name if sub_service else None,
+        sub_service_name=(
+            sub_service.sub_service_name
+            if sub_service else None
+        ),
         budget_min=booking.budget_min,
         budget_max=booking.budget_max,
         offer_price=offer_price,
-        status=booking.booking_status.value if booking.booking_status else None,
+        status=(
+            booking.booking_status.value
+            if booking.booking_status else None
+        ),
         has_offer=has_offer,
         accepted_field_engineer=accepted_field_engineer,
     )
