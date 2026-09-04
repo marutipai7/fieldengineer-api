@@ -815,6 +815,12 @@ class AdditionalTask(Base):
         cascade="all, delete-orphan"
     )
 
+    proposals = relationship(
+        "AdditionalTaskProposal",
+        back_populates="additional_task",
+        cascade="all, delete-orphan"
+    )
+
 
 class AdditionalTaskDocument(Base):
     __tablename__ = "additional_task_documents"
@@ -860,4 +866,78 @@ class AdditionalTaskDocument(Base):
     additional_task = relationship(
         "AdditionalTask",
         back_populates="documents"
+    )
+
+class AdditionalTaskProposal(Base):
+    __tablename__ = "additional_task_proposals"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    additional_task_id = Column(
+        Integer,
+        ForeignKey(
+            "additional_tasks.id",
+            ondelete="CASCADE"
+        ),
+        nullable=False
+    )
+
+    field_engineer_id = Column(
+        Integer,
+        ForeignKey(
+            "user_profiles.id",
+            ondelete="SET NULL"
+        ),
+        nullable=True
+    )
+
+    proposed_cost = Column(
+        Numeric(10, 2),
+        nullable=False
+    )
+
+    expected_duration_hours = Column(
+        Integer,
+        nullable=True
+    )
+
+    expected_duration_minutes = Column(
+        Integer,
+        nullable=True
+    )
+
+    included_work = Column(
+        Text,
+        nullable=True
+    )
+
+    engineer_message = Column(
+        Text,
+        nullable=True
+    )
+
+    status = Column(
+        String(50),
+        nullable=False,
+        default="pending"
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    additional_task = relationship(
+        "AdditionalTask",
+        back_populates="proposals"
     )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from app.booking.models import Booking, BookingStatus
 from sqlalchemy import select, func, distinct
@@ -33,7 +33,10 @@ from app.booking.models import (
     SiteContactPerson,
     AccessInformation,
     BookingSchedule,
-    BookingDocument
+    BookingDocument,
+    AdditionalTask,
+    AdditionalTaskDocument,
+    AdditionalTaskProposal,
 )
 
 from app.booking.models import (
@@ -42,6 +45,10 @@ from app.booking.models import (
     FieldEngineerService,
 )
 
+from app.booking.schemas import (
+    AdditionalTaskProposalCreate,
+    AdditionalTaskProposalResponse,
+)
 
 from app.core.database import get_db
 from app.utils.auth_utils import get_current_user_mobile
@@ -429,6 +436,560 @@ async def get_bookings(
 
     return result
 
+# ============================================================
+# CREATE ADDITIONAL TASK
+# ============================================================
+
+@router.post("/{booking_id}/additional-tasks")
+async def create_additional_task(
+    request: Request,
+    booking_id: int,
+
+    task_type: str = Form(...),
+    task_description: str = Form(...),
+    priority_level: str = Form(...),
+    estimated_budget: float = Form(...),
+    estimated_duration_hours: int | None = Form(None),
+    estimated_duration_minutes: int | None = Form(None),
+
+    files: list[UploadFile] | None = File(None),
+
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    # ---------------------------------------------------------
+    # 1. Find logged-in user
+    # ---------------------------------------------------------
+
+    user = db.execute(
+        select(User).where(
+            User.mobile_number == current_user_mobile
+        )
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # ---------------------------------------------------------
+    # 2. Verify booking belongs to user
+    # ---------------------------------------------------------
+
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    # ---------------------------------------------------------
+    # 3. Validate task description
+    # ---------------------------------------------------------
+
+    if len(task_description) > 500:
+        raise HTTPException(
+            status_code=400,
+            detail="Task description cannot exceed 500 characters"
+        )
+
+    # ---------------------------------------------------------
+    # 4. Validate files
+    # Maximum 5 files
+    # Maximum 10 MB per file
+    # ---------------------------------------------------------
+
+    files = files or []
+
+    if len(files) > 5:
+        raise HTTPException(
+            status_code=400,
+            detail="You can upload a maximum of 5 files"
+        )
+
+    max_file_size = 10 * 1024 * 1024
+
+    file_contents = []
+
+    for file in files:
+        content = await file.read()
+
+        if len(content) > max_file_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} exceeds the 10 MB limit"
+            )
+
+        file_contents.append((file, content))
+
+    # ---------------------------------------------------------
+    # 5. Create Additional Task
+    # ---------------------------------------------------------
+
+    additional_task = AdditionalTask(
+        booking_id=booking.id,
+        task_type=task_type,
+        task_description=task_description,
+        priority_level=priority_level,
+        estimated_budget=estimated_budget,
+        estimated_duration_hours=estimated_duration_hours,
+        estimated_duration_minutes=estimated_duration_minutes,
+        status="pending"
+    )
+
+    db.add(additional_task)
+    db.flush()
+
+    # ---------------------------------------------------------
+    # 6. Save uploaded files
+    # ---------------------------------------------------------
+
+    upload_dir = Path(
+        f"uploads/booking/{booking_id}/additional-tasks/{additional_task.id}"
+    )
+
+    upload_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    saved_documents = []
+
+    for file, content in file_contents:
+
+        original_filename = file.filename or "document"
+
+        extension = Path(original_filename).suffix
+
+        filename = f"{uuid.uuid4().hex}{extension}"
+
+        saved_path = upload_dir / filename
+
+        with open(saved_path, "wb") as buffer:
+            buffer.write(content)
+
+        # -----------------------------------------------------
+        # Build browser-accessible URL
+        # -----------------------------------------------------
+
+        relative_path = (
+            f"uploads/booking/"
+            f"{booking_id}/additional-tasks/"
+            f"{additional_task.id}/"
+            f"{filename}"
+        )
+
+        file_url = str(request.base_url) + relative_path
+
+        document = AdditionalTaskDocument(
+            additional_task_id=additional_task.id,
+            file_name=original_filename,
+            file_url=file_url,
+            file_size=str(len(content))
+        )
+
+        db.add(document)
+
+        saved_documents.append(document)
+
+    # ---------------------------------------------------------
+    # 7. Commit everything together
+    # ---------------------------------------------------------
+
+    db.commit()
+
+    db.refresh(additional_task)
+
+    for document in saved_documents:
+        db.refresh(document)
+
+    # ---------------------------------------------------------
+    # 8. Response
+    # ---------------------------------------------------------
+
+    return {
+        "message": "Additional task submitted successfully",
+        "task": {
+            "id": additional_task.id,
+            "booking_id": additional_task.booking_id,
+            "task_type": additional_task.task_type,
+            "task_description": additional_task.task_description,
+            "priority_level": additional_task.priority_level,
+            "estimated_budget": float(additional_task.estimated_budget),
+            "estimated_duration_hours": additional_task.estimated_duration_hours,
+            "estimated_duration_minutes": additional_task.estimated_duration_minutes,
+            "status": additional_task.status,
+            "documents": [
+                {
+                    "id": document.id,
+                    "file_name": document.file_name,
+                    "file_url": document.file_url,
+                    "file_size": document.file_size
+                }
+                for document in saved_documents
+            ]
+        }
+    }
+
+# ============================================================
+# GET ALL ADDITIONAL TASKS
+# ============================================================
+
+@router.get("/{booking_id}/additional-tasks")
+async def get_additional_tasks(
+    booking_id: int,
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user = db.execute(
+        select(User).where(
+            User.mobile_number == current_user_mobile
+        )
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    tasks = db.execute(
+        select(AdditionalTask)
+        .where(
+            AdditionalTask.booking_id == booking_id
+        )
+        .order_by(AdditionalTask.created_at.desc())
+    ).scalars().all()
+
+    return [
+        {
+            "id": task.id,
+            "booking_id": task.booking_id,
+            "task_type": task.task_type,
+            "task_description": task.task_description,
+            "priority_level": task.priority_level,
+            "estimated_budget": (
+                float(task.estimated_budget)
+                if task.estimated_budget is not None
+                else None
+            ),
+            "estimated_duration_hours": task.estimated_duration_hours,
+            "estimated_duration_minutes": task.estimated_duration_minutes,
+            "status": task.status,
+            "documents": [
+                {
+                    "id": document.id,
+                    "file_name": document.file_name,
+                    "file_url": document.file_url,
+                    "file_size": document.file_size
+                }
+                for document in task.documents
+            ],
+            "created_at": task.created_at,
+            "updated_at": task.updated_at
+        }
+        for task in tasks
+    ]
+
+# ============================================================
+# GET SINGLE ADDITIONAL TASK
+# ============================================================
+
+@router.get("/{booking_id}/additional-tasks/{task_id}")
+async def get_additional_task(
+    booking_id: int,
+    task_id: int,
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    user = db.execute(
+        select(User).where(
+            User.mobile_number == current_user_mobile
+        )
+    ).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    booking = db.execute(
+        select(Booking).where(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+    ).scalars().first()
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    task = db.execute(
+        select(AdditionalTask).where(
+            AdditionalTask.id == task_id,
+            AdditionalTask.booking_id == booking_id
+        )
+    ).scalars().first()
+
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail="Additional task not found"
+        )
+
+    return {
+        "id": task.id,
+        "booking_id": task.booking_id,
+        "task_type": task.task_type,
+        "task_description": task.task_description,
+        "priority_level": task.priority_level,
+        "estimated_budget": (
+            float(task.estimated_budget)
+            if task.estimated_budget is not None
+            else None
+        ),
+        "estimated_duration_hours": task.estimated_duration_hours,
+        "estimated_duration_minutes": task.estimated_duration_minutes,
+        "status": task.status,
+        "documents": [
+            {
+                "id": document.id,
+                "file_name": document.file_name,
+                "file_url": document.file_url,
+                "file_size": document.file_size
+            }
+            for document in task.documents
+        ],
+        "created_at": task.created_at,
+        "updated_at": task.updated_at
+    }
+
+@router.post(
+    "/{booking_id}/additional-tasks/{task_id}/proposal",
+    response_model=AdditionalTaskProposalResponse
+)
+async def create_additional_task_proposal(
+    booking_id: int,
+    task_id: int,
+    payload: AdditionalTaskProposalCreate,
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    # Get current user
+    user = (
+        db.query(User)
+        .filter(User.mobile_number == current_user_mobile)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Get field engineer profile
+    field_engineer = (
+        db.query(UserProfile)
+        .filter(UserProfile.user_id == user.id)
+        .first()
+    )
+
+    if not field_engineer:
+        raise HTTPException(
+            status_code=404,
+            detail="Field engineer profile not found"
+        )
+
+    # Check booking exists
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    # Check additional task belongs to this booking
+    additional_task = (
+        db.query(AdditionalTask)
+        .filter(
+            AdditionalTask.id == task_id,
+            AdditionalTask.booking_id == booking_id
+        )
+        .first()
+    )
+
+    if not additional_task:
+        raise HTTPException(
+            status_code=404,
+            detail="Additional task not found for this booking"
+        )
+
+    # Don't allow another pending/approved proposal
+    existing_proposal = (
+        db.query(AdditionalTaskProposal)
+        .filter(
+            AdditionalTaskProposal.additional_task_id == task_id,
+            AdditionalTaskProposal.field_engineer_id == field_engineer.id,
+            AdditionalTaskProposal.status.in_(["pending", "approved"])
+        )
+        .first()
+    )
+
+    if existing_proposal:
+        raise HTTPException(
+            status_code=400,
+            detail="You already submitted a proposal for this additional task"
+        )
+
+    # Create proposal
+    proposal = AdditionalTaskProposal(
+        additional_task_id=task_id,
+        field_engineer_id=field_engineer.id,
+        proposed_cost=payload.proposed_cost,
+        expected_duration_hours=payload.expected_duration_hours,
+        expected_duration_minutes=payload.expected_duration_minutes,
+        included_work=payload.included_work,
+        engineer_message=payload.engineer_message,
+        status="pending"
+    )
+
+    db.add(proposal)
+
+    # Update task status
+    additional_task.status = "proposal_sent"
+
+    db.commit()
+    db.refresh(proposal)
+
+    return proposal
+
+@router.post(
+    "/{booking_id}/additional-tasks/{task_id}/proposal/{proposal_id}/approve"
+)
+async def approve_additional_task_proposal(
+    booking_id: int,
+    task_id: int,
+    proposal_id: int,
+    current_user_mobile: str = Depends(get_current_user_mobile),
+    db: Session = Depends(get_db)
+):
+    # Get current customer
+    user = (
+        db.query(User)
+        .filter(User.mobile_number == current_user_mobile)
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Check booking belongs to current customer
+    booking = (
+        db.query(Booking)
+        .filter(
+            Booking.id == booking_id,
+            Booking.user_id == user.id
+        )
+        .first()
+    )
+
+    if not booking:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found"
+        )
+
+    # Check additional task
+    additional_task = (
+        db.query(AdditionalTask)
+        .filter(
+            AdditionalTask.id == task_id,
+            AdditionalTask.booking_id == booking_id
+        )
+        .first()
+    )
+
+    if not additional_task:
+        raise HTTPException(
+            status_code=404,
+            detail="Additional task not found for this booking"
+        )
+
+    # Get proposal
+    proposal = (
+        db.query(AdditionalTaskProposal)
+        .filter(
+            AdditionalTaskProposal.id == proposal_id,
+            AdditionalTaskProposal.additional_task_id == task_id
+        )
+        .first()
+    )
+
+    if not proposal:
+        raise HTTPException(
+            status_code=404,
+            detail="Proposal not found"
+        )
+
+    # Proposal must still be pending
+    if proposal.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Proposal cannot be approved because its status is '{proposal.status}'"
+        )
+
+    # Approve proposal
+    proposal.status = "approved"
+
+    # Update additional task status
+    additional_task.status = "approved"
+
+    db.commit()
+    db.refresh(proposal)
+
+    return {
+        "message": "Additional task proposal approved successfully",
+        "booking_id": booking_id,
+        "task_id": task_id,
+        "proposal_id": proposal.id,
+        "proposal_status": proposal.status,
+        "task_status": additional_task.status,
+        "approved_cost": proposal.proposed_cost,
+        "approved_duration_hours": proposal.expected_duration_hours,
+        "approved_duration_minutes": proposal.expected_duration_minutes
+    }
 
 @router.get("/{booking_id}")
 async def get_booking_details(
@@ -1094,3 +1655,4 @@ async def get_service_detail(
         "about_service": service_detail.about_service,
         "whats_included": service_detail.whats_included
     }
+

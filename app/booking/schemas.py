@@ -314,15 +314,6 @@ class ServiceDetailCreateSchema(BaseModel):
     about_service: Optional[str] = None
     whats_included: Optional[str] = None
 
-class AdditionalTaskCreate(BaseModel):
-    task_type: str
-    task_description: str
-    priority_level: str
-    estimated_budget: Decimal | None = None
-    estimated_duration_hours: int | None = None
-    estimated_duration_minutes: int | None = None
-
-
 class AdditionalTaskDocumentResponse(BaseModel):
     id: int
     file_name: str
@@ -344,6 +335,29 @@ class AdditionalTaskResponse(BaseModel):
     estimated_duration_minutes: int | None = None
     status: str
     documents: list[AdditionalTaskDocumentResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class AdditionalTaskProposalCreate(BaseModel):
+    proposed_cost: Decimal
+    expected_duration_hours: int | None = None
+    expected_duration_minutes: int | None = None
+    included_work: str | None = None
+    engineer_message: str | None = None
+
+
+class AdditionalTaskProposalResponse(BaseModel):
+    id: int
+    additional_task_id: int
+    field_engineer_id: int | None = None
+    proposed_cost: Decimal
+    expected_duration_hours: int | None = None
+    expected_duration_minutes: int | None = None
+    included_work: str | None = None
+    engineer_message: str | None = None
+    status: str
 
     class Config:
         from_attributes = True
