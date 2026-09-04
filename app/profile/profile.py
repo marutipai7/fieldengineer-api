@@ -54,6 +54,7 @@ from app.profile.models import (
     EngineerInvitation,
     Vendor,
     CustomerBankDetail,
+    CustomerCompanyAssociation,
 )
 
 from app.utils.auth_utils import (
@@ -4120,6 +4121,13 @@ async def get_customer_profile(
         )
     ).scalars().first()
 
+    active_company_association = db.execute(
+        select(CustomerCompanyAssociation).where(
+            CustomerCompanyAssociation.user_id == user.id,
+            CustomerCompanyAssociation.status == "active"
+        )
+    ).scalars().first()
+
     # =========================================================
     # TOTAL BOOKINGS
     # =========================================================
@@ -4203,6 +4211,19 @@ async def get_customer_profile(
     "data": {
 
         "customer_type": profile.customer_type,
+
+        "joined_company": {
+            "company_id": (
+                active_company_association.company_id
+                if active_company_association
+                else None
+            ),
+            "status": (
+                active_company_association.status
+                if active_company_association
+                else None
+            ),
+        },
 
         # -------------------------------------------------
         # STEP 2 - BASIC INFORMATION

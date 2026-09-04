@@ -1237,3 +1237,41 @@ class CustomerBankDetail(Base):
         "UserProfile",
         back_populates="customer_bank_detail"
     )
+
+class CustomerCompanyAssociation(Base):
+    __tablename__ = "customer_company_associations"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    company_id = Column(
+        Integer,
+        ForeignKey("vendors.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    status = Column(
+        String(20),
+        nullable=False,
+        default="active"
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
