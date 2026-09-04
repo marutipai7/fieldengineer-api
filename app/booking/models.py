@@ -746,3 +746,118 @@ class FieldEngineerService(Base):
         "UserProfile",
         back_populates="services"
     )
+
+class AdditionalTask(Base):
+    __tablename__ = "additional_tasks"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    booking_id = Column(
+        Integer,
+        ForeignKey("bookings.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    task_type = Column(
+        String(100),
+        nullable=False
+    )
+
+    task_description = Column(
+        Text,
+        nullable=False
+    )
+
+    priority_level = Column(
+        String(50),
+        nullable=False
+    )
+
+    estimated_budget = Column(
+        Numeric(10, 2),
+        nullable=True
+    )
+
+    estimated_duration_hours = Column(
+        Integer,
+        nullable=True
+    )
+
+    estimated_duration_minutes = Column(
+        Integer,
+        nullable=True
+    )
+
+    status = Column(
+        String(50),
+        nullable=False,
+        default="pending"
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    documents = relationship(
+        "AdditionalTaskDocument",
+        back_populates="additional_task",
+        cascade="all, delete-orphan"
+    )
+
+
+class AdditionalTaskDocument(Base):
+    __tablename__ = "additional_task_documents"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    additional_task_id = Column(
+        Integer,
+        ForeignKey("additional_tasks.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    file_name = Column(
+        String(255),
+        nullable=False
+    )
+
+    file_url = Column(
+        Text,
+        nullable=False
+    )
+
+    file_size = Column(
+        String(50),
+        nullable=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    additional_task = relationship(
+        "AdditionalTask",
+        back_populates="documents"
+    )

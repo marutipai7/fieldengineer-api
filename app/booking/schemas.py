@@ -313,3 +313,37 @@ class ServiceDetailCreateSchema(BaseModel):
     service_tags: Optional[str] = None
     about_service: Optional[str] = None
     whats_included: Optional[str] = None
+
+class AdditionalTaskCreate(BaseModel):
+    task_type: str
+    task_description: str
+    priority_level: str
+    estimated_budget: Decimal | None = None
+    estimated_duration_hours: int | None = None
+    estimated_duration_minutes: int | None = None
+
+
+class AdditionalTaskDocumentResponse(BaseModel):
+    id: int
+    file_name: str
+    file_url: str
+    file_size: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdditionalTaskResponse(BaseModel):
+    id: int
+    booking_id: int
+    task_type: str
+    task_description: str
+    priority_level: str
+    estimated_budget: Decimal | None = None
+    estimated_duration_hours: int | None = None
+    estimated_duration_minutes: int | None = None
+    status: str
+    documents: list[AdditionalTaskDocumentResponse] = []
+
+    class Config:
+        from_attributes = True
