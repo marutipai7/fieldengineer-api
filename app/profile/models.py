@@ -313,11 +313,12 @@ class FieldEngineerSkill(Base):
 
     field_engineer_id = Column(
         Integer,
-        ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
     )
 
     skill_name = Column(String(255), nullable=False)
-
+    
 class FieldEngineerExperience(Base):
     __tablename__ = "field_engineer_experiences"
 

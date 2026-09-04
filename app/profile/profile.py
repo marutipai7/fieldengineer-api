@@ -2299,7 +2299,6 @@ async def get_vendor_profile(
             "legal_business_name": profile.legal_business_name,
             "business_type": profile.business_type,
             "industry": profile.industry,
-            "company_registration_number": profile.company_registration_number,
             "gst_number": profile.gst_number,
             "pan_number": profile.pan_number,
             "website": profile.website,

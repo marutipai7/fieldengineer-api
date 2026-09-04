@@ -124,7 +124,6 @@ app = FastAPI(
 )
 
 
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
@@ -141,18 +140,21 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         },
     )
 
-app.include_router(lead_router)
-app.include_router(field_engineer_services_router)
-app.include_router(work_preference_router)
+
+# ============================================================
+# UPLOADS
+# ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOADS_DIR)),
+    name="uploads"
+)
 
 app.include_router(auth_router)
 app.include_router(invite_redirect_router)
@@ -169,3 +171,6 @@ app.include_router(notification_router)
 app.include_router(settings_support_router)
 app.include_router(permissions_router)
 app.include_router(notification_settings_router)
+app.include_router(lead_router)
+app.include_router(field_engineer_services_router)
+app.include_router(work_preference_router)
