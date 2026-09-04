@@ -3189,23 +3189,24 @@ async def complete_customer_profile(
     identity_date_of_birth = get_text("identity_date_of_birth")
     identity_number = get_text("identity_number")
 
-    company_name = get_text("company_name")
-    business_type = get_text("business_type")
-    industry = get_text("industry")
-    company_registration_number = get_text(
-        "company_registration_number"
-    )
-    office_address = get_text("office_address")
-    city = get_text("city")
-    state = get_text("state")
-    pincode = get_text("pincode")
-    gst_number = get_text("gst_number")
-    pan_number = get_text("pan_number")
-    billing_email = get_text("billing_email")
-    authorized_person_name = get_text("authorized_person_name")
-    designation = get_text("designation")
-    work_phone = get_text("work_phone")
-    work_email = get_text("work_email")
+    company = get_text("Company")
+    business_type = get_text("Business Type")
+    industry_type = get_text("Industry Type")
+    company_website = get_text("Company Website (Optional)")
+
+    office_address = get_text("Office Address")
+    city = get_text("City")
+    state = get_text("State")
+    pin_code = get_text("Enter PIN Code")
+
+    gst_number = get_text("GST Number")
+    tax_number = get_text("TAX Number")
+    billing_email = get_text("Billing Email")
+
+    authorized_full_name = get_text("Full Name")
+    designation = get_text("Designation")
+    work_phone_number = get_text("Phone Number")
+    work_email = get_text("Work Email")
 
     account_holder_name = get_text("account_holder_name")
     bank_name = get_text("bank_name")
@@ -3217,6 +3218,13 @@ async def complete_customer_profile(
     email_invoice_for_every_payout = get_bool(
         "email_invoice_for_every_payout"
     )
+
+    # STEP 5 FORM DATA
+    cin_number = get_text("Enter CIN Number")
+    tax_number_step5 = get_text("Enter TAX Number")
+    gst_number_step5 = get_text("Enter GST Number")
+    document_number = get_text("Enter Document Number")
+    bank_account_number = get_text("Enter Bank Account Number")
 
     # -----------------------------
     # FILE FORM DATA
@@ -3239,11 +3247,8 @@ async def complete_customer_profile(
 
     moa_aoa = form.get("moa_aoa")
 
-    bank_statement = form.get("bank_statement")
-
-    identity_proof = form.get("identity_proof")
-
-    address_proof = form.get("address_proof")
+    bank_account_proof = form.get("bank_account_proof")
+    cancelled_cheque = form.get("cancelled_cheque")
 
     # -----------------------------
     # GET USER + PROFILE
@@ -3274,6 +3279,12 @@ async def complete_customer_profile(
 
     elif step == 2:
 
+        full_name = get_text("full_name")
+        email = get_text("email")
+
+        # Phone number comes from the logged-in user
+        phone_number = current_user_mobile
+
         if not full_name:
             raise HTTPException(
                 status_code=400,
@@ -3286,21 +3297,30 @@ async def complete_customer_profile(
                 detail="Email is required."
             )
 
-        if not phone_number:
+        # Check whether email already belongs to another user
+        existing_user = db.execute(
+            select(User).where(
+                User.email == email,
+                User.id != user.id
+            )
+        ).scalar_one_or_none()
+
+        if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail="Phone number is required."
+                detail="Email address is already registered."
             )
 
+        # Update editable fields
         profile.full_name = full_name
         user.email = email
-        user.phone_number = phone_number
 
-        db.add(profile)
-        db.add(user)
+        # DO NOT update phone number.
+        # phone_number is the number used to log in.
+        # current_user_mobile is only used to identify the logged-in user.
+
         db.commit()
         db.refresh(profile)
-        db.refresh(user)
 
         message = "Step 2 completed successfully."
 
@@ -3309,6 +3329,21 @@ async def complete_customer_profile(
     # =========================================================
 
     elif step == 3:
+
+        # ---------------------------------------------------------
+        # STEP 3 FORM DATA
+        # ---------------------------------------------------------
+
+        identity_type = get_text("identity_type")
+        identity_full_name = get_text("identity_full_name")
+        identity_date_of_birth = get_text("identity_date_of_birth")
+        gender = get_text("gender")
+        identity_number = get_text("identity_number")
+        address_on_id = get_text("address_on_id")
+
+        # ---------------------------------------------------------
+        # REQUIRED VALIDATION
+        # ---------------------------------------------------------
 
         if not identity_type:
             raise HTTPException(
@@ -3328,6 +3363,12 @@ async def complete_customer_profile(
                 detail="Date of birth is required."
             )
 
+        if not gender:
+            raise HTTPException(
+                status_code=400,
+                detail="Gender is required."
+            )
+
         if not identity_number:
             raise HTTPException(
                 status_code=400,
@@ -3337,22 +3378,25 @@ async def complete_customer_profile(
         if front_image is None:
             raise HTTPException(
                 status_code=400,
-                detail="front_image is required."
+                detail="Front ID document is required."
             )
 
         if not getattr(front_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="front_image must be a valid uploaded file."
+                detail="Front ID document must be a valid uploaded file."
             )
 
         if back_image is not None and not getattr(back_image, "filename", None):
             raise HTTPException(
                 status_code=400,
-                detail="back_image must be a valid uploaded file."
+                detail="Back ID document must be a valid uploaded file."
             )
 
-        # Parse DOB
+        # ---------------------------------------------------------
+        # PARSE DATE OF BIRTH
+        # ---------------------------------------------------------
+
         try:
             parsed_dob = date.fromisoformat(
                 identity_date_of_birth
@@ -3362,6 +3406,10 @@ async def complete_customer_profile(
                 status_code=400,
                 detail="identity_date_of_birth must be in YYYY-MM-DD format."
             )
+
+        # ---------------------------------------------------------
+        # GET OR CREATE CUSTOMER IDENTITY
+        # ---------------------------------------------------------
 
         identity = db.execute(
             select(CustomerIdentity).where(
@@ -3375,16 +3423,31 @@ async def complete_customer_profile(
             )
             db.add(identity)
 
+        # ---------------------------------------------------------
+        # SAVE IDENTITY INFORMATION
+        # ---------------------------------------------------------
+
         identity.identity_type = identity_type
         identity.identity_full_name = identity_full_name
         identity.date_of_birth = parsed_dob
         identity.identity_number = identity_number
+        identity.address_on_id = address_on_id
 
-        # Save actual uploaded files
+        # Gender belongs to UserProfile
+        profile.gender = gender
+
+        # ---------------------------------------------------------
+        # SAVE FRONT ID DOCUMENT
+        # ---------------------------------------------------------
+
         identity.front_image = await save_customer_uploaded_file(
             front_image,
             front_image.filename
         )
+
+        # ---------------------------------------------------------
+        # SAVE BACK ID DOCUMENT IF PROVIDED
+        # ---------------------------------------------------------
 
         if back_image:
             identity.back_image = await save_customer_uploaded_file(
@@ -3392,7 +3455,16 @@ async def complete_customer_profile(
                 back_image.filename
             )
 
+        # ---------------------------------------------------------
+        # SAVE
+        # ---------------------------------------------------------
+
+        db.add(profile)
+        db.add(identity)
+
         db.commit()
+
+        db.refresh(profile)
         db.refresh(identity)
 
         message = "Step 3 completed successfully."
@@ -3404,20 +3476,20 @@ async def complete_customer_profile(
     elif step == 4:
 
         business_values = [
-            company_name,
+            company,
             business_type,
-            industry,
-            company_registration_number,
+            industry_type,
+            company_website,
             office_address,
             city,
             state,
-            pincode,
+            pin_code,
             gst_number,
-            pan_number,
+            tax_number,
             billing_email,
-            authorized_person_name,
+            authorized_full_name,
             designation,
-            work_phone,
+            work_phone_number,
             work_email
         ]
 
@@ -3426,32 +3498,43 @@ async def complete_customer_profile(
             for value in business_values
         )
 
+        # ---------------------------------------------------------
+        # INDIVIDUAL
+        # ---------------------------------------------------------
+
         if not has_business_data:
 
+            # User is continuing as an individual.
+            # Business information is optional and can be added later.
             profile.customer_type = "individual"
+
+            db.add(profile)
+            db.commit()
+            db.refresh(profile)
+
+            message = "Step 4 completed successfully."
+
+        # ---------------------------------------------------------
+        # BUSINESS INFORMATION
+        # ---------------------------------------------------------
 
         else:
 
-            profile.customer_type = "business"
-
             required_business_fields = {
-                "company_name": company_name,
-                "business_type": business_type,
-                "industry": industry,
-                "company_registration_number":
-                    company_registration_number,
-                "office_address": office_address,
-                "city": city,
-                "state": state,
-                "pincode": pincode,
-                "gst_number": gst_number,
-                "pan_number": pan_number,
-                "billing_email": billing_email,
-                "authorized_person_name":
-                    authorized_person_name,
-                "designation": designation,
-                "work_phone": work_phone,
-                "work_email": work_email
+                "Company": company,
+                "Business Type": business_type,
+                "Industry Type": industry_type,
+                "Office Address": office_address,
+                "City": city,
+                "State": state,
+                "Enter PIN Code": pin_code,
+                "GST Number": gst_number,
+                "TAX Number": tax_number,
+                "Billing Email": billing_email,
+                "Full Name": authorized_full_name,
+                "Designation": designation,
+                "Phone Number": work_phone_number,
+                "Work Email": work_email
             }
 
             missing_fields = [
@@ -3469,6 +3552,10 @@ async def complete_customer_profile(
                     }
                 )
 
+            # ---------------------------------------------------------
+            # GET OR CREATE BUSINESS INFORMATION
+            # ---------------------------------------------------------
+
             business = db.execute(
                 select(CustomerBusiness).where(
                     CustomerBusiness.user_profile_id == profile.id
@@ -3481,29 +3568,44 @@ async def complete_customer_profile(
                 )
                 db.add(business)
 
-            business.company_name = company_name
+            # ---------------------------------------------------------
+            # SAVE BUSINESS INFORMATION
+            # ---------------------------------------------------------
+
+            business.company_name = company
             business.business_type = business_type
-            business.industry = industry
-            business.company_registration_number = (
-                company_registration_number
-            )
+            business.industry = industry_type
+            business.website = company_website
             business.office_address = office_address
             business.city = city
             business.state = state
-            business.pincode = pincode
+            business.pincode = pin_code
             business.gst_number = gst_number
-            business.pan_number = pan_number
+            business.tax_number = tax_number
             business.billing_email = billing_email
-            business.authorized_person_name = (
-                authorized_person_name
-            )
+            business.authorized_person_name = authorized_full_name
             business.designation = designation
-            business.work_phone = work_phone
+            business.work_phone = work_phone_number
             business.work_email = work_email
 
-        db.commit()
+            # IMPORTANT:
+            # Do NOT change profile.customer_type here.
+            #
+            # If the user originally selected "individual",
+            # they can still have business information.
+            #
+            # customer_type represents the registration/UI choice,
+            # while CustomerBusiness stores optional company information.
 
-        message = "Step 4 completed successfully."
+            db.add(profile)
+            db.add(business)
+
+            db.commit()
+
+            db.refresh(profile)
+            db.refresh(business)
+
+            message = "Step 4 completed successfully."
 
     # =========================================================
     # STEP 5
@@ -3523,34 +3625,105 @@ async def complete_customer_profile(
             )
             db.add(documents)
 
-        if profile.customer_type == "business":
+        # =========================================================
+        # SAVE DOCUMENT NUMBERS
+        # =========================================================
 
-            required_documents = {
-                "company_registration_certificate":
-                    company_registration_certificate,
-                "tax_identification_card":
-                    tax_identification_card,
-                "gst_certificate":
-                    gst_certificate,
-                "moa_aoa":
-                    moa_aoa,
-                "bank_statement":
-                    bank_statement
-            }
+        if cin_number:
+            documents.cin_number = cin_number
 
-            missing_documents = [
-                name
-                for name, file in required_documents.items()
-                if not file
-            ]
+        if tax_number_step5:
+            documents.tax_number = tax_number_step5
 
-            if missing_documents:
+        if gst_number_step5:
+            documents.gst_number = gst_number_step5
+
+        if document_number:
+            documents.document_number = document_number
+
+        if bank_account_number:
+            documents.bank_account_number = bank_account_number
+
+        # ---------------------------------------------------------
+        # INDIVIDUAL CUSTOMER
+        # ---------------------------------------------------------
+
+        if profile.customer_type == "individual":
+
+            if not tax_identification_card:
                 raise HTTPException(
                     status_code=400,
-                    detail={
-                        "message": "Required business documents are missing.",
-                        "missing_documents": missing_documents
-                    }
+                    detail="Tax Identification Card is required."
+                )
+
+            if not tax_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter TAX Number is required."
+                )
+
+            documents.tax_identification_card = (
+                await save_customer_uploaded_file(
+                    tax_identification_card,
+                    tax_identification_card.filename
+                )
+            )
+
+            documents.tax_number = tax_number_step5
+
+            # Optional Bank Account Proof
+            if bank_account_proof:
+                documents.bank_account_proof = (
+                    await save_customer_uploaded_file(
+                        bank_account_proof,
+                        bank_account_proof.filename
+                    )
+                )
+
+            # Optional Bank Account Number
+            if bank_account_number:
+                documents.bank_account_number = bank_account_number
+
+        # ---------------------------------------------------------
+        # BUSINESS CUSTOMER
+        # ---------------------------------------------------------
+
+        else:
+
+            if not company_registration_certificate:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Company Registration Document is required."
+                )
+
+            if not cin_number:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter CIN Number is required."
+                )
+
+            if not tax_identification_card:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tax Identification Document is required."
+                )
+
+            if not tax_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter TAX Number is required."
+                )
+
+            if not gst_certificate:
+                raise HTTPException(
+                    status_code=400,
+                    detail="GST or SST Documents is required."
+                )
+
+            if not gst_number_step5:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter GST Number is required."
                 )
 
             documents.company_registration_certificate = (
@@ -3560,12 +3733,16 @@ async def complete_customer_profile(
                 )
             )
 
+            documents.cin_number = cin_number
+
             documents.tax_identification_card = (
                 await save_customer_uploaded_file(
                     tax_identification_card,
                     tax_identification_card.filename
                 )
             )
+
+            documents.tax_number = tax_number_step5
 
             documents.gst_certificate = (
                 await save_customer_uploaded_file(
@@ -3574,48 +3751,31 @@ async def complete_customer_profile(
                 )
             )
 
-            documents.moa_aoa = (
-                await save_customer_uploaded_file(
-                    moa_aoa,
-                    moa_aoa.filename
-                )
-            )
+            documents.gst_number = gst_number_step5
 
-            # bank_statement → bank_account_proof
-            documents.bank_account_proof = (
-                await save_customer_uploaded_file(
-                    bank_statement,
-                    bank_statement.filename
-                )
-            )
-
-        else:
-
-            if not identity_proof:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Identity proof is required."
+            # Optional MOA / AOA
+            if moa_aoa:
+                documents.moa_aoa = (
+                    await save_customer_uploaded_file(
+                        moa_aoa,
+                        moa_aoa.filename
+                    )
                 )
 
-            if not address_proof:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Address proof is required."
+                if document_number:
+                    documents.document_number = document_number
+
+            # Optional Bank Account Proof
+            if bank_account_proof:
+                documents.bank_account_proof = (
+                    await save_customer_uploaded_file(
+                        bank_account_proof,
+                        bank_account_proof.filename
+                    )
                 )
 
-            documents.identity_proof = (
-                await save_customer_uploaded_file(
-                    identity_proof,
-                    identity_proof.filename
-                )
-            )
-
-            documents.address_proof = (
-                await save_customer_uploaded_file(
-                    address_proof,
-                    address_proof.filename
-                )
-            )
+                if bank_account_number:
+                    documents.bank_account_number = bank_account_number
 
         db.commit()
         db.refresh(documents)
@@ -3670,9 +3830,26 @@ async def complete_customer_profile(
         bank.ifsc_code = ifsc_code
         bank.local_code = local_code
         bank.bank_address = bank_address
+
         bank.email_invoice_for_every_payout = (
             email_invoice_for_every_payout
         )
+
+        # ---------------------------------------------------------
+        # OPTIONAL CANCELLED CHEQUE
+        # ---------------------------------------------------------
+
+        if cancelled_cheque:
+            if not getattr(cancelled_cheque, "filename", None):
+                raise HTTPException(
+                    status_code=400,
+                    detail="cancelled_cheque must be a valid uploaded file."
+                )
+
+            bank.cancelled_cheque = await save_customer_uploaded_file(
+                cancelled_cheque,
+                cancelled_cheque.filename
+            )
 
         db.commit()
         db.refresh(bank)
@@ -3739,7 +3916,9 @@ def calculate_customer_completion(
     # STEP 1 - PHONE VERIFIED
     # =========================================================
 
-    step1_completed = bool(user.is_verified)
+    step1_completed = bool(
+        user and user.is_verified
+    )
 
     if step1_completed:
         completed_steps += 1
@@ -3748,11 +3927,14 @@ def calculate_customer_completion(
     # STEP 2 - BASIC INFORMATION
     # =========================================================
 
+    # Phone number is the login phone number stored on User.
+    # It is not editable in Step 2.
     step2_completed = bool(
         profile
         and profile.full_name
+        and user
         and user.email
-        and user.phone_number
+        and user.mobile_number
     )
 
     if step2_completed:
@@ -3767,18 +3949,22 @@ def calculate_customer_completion(
         and identity.identity_type
         and identity.identity_full_name
         and identity.date_of_birth
+        and profile
+        and profile.gender
         and identity.identity_number
+        and identity.front_image
     )
 
     if step3_completed:
         completed_steps += 1
 
     # =========================================================
-    # STEP 4 - BUSINESS INFORMATION
+    # STEP 4 - BUSINESS / INDIVIDUAL
     # =========================================================
 
     if profile and profile.customer_type == "individual":
 
+        # Individual customers skip business details.
         step4_completed = True
 
     elif profile and profile.customer_type == "business":
@@ -3788,13 +3974,12 @@ def calculate_customer_completion(
             and business.company_name
             and business.business_type
             and business.industry
-            and business.company_registration_number
-            and business.gst_number
+            and business.office_address
             and business.city
             and business.state
             and business.pincode
-            and business.office_address
-            and business.pan_number
+            and business.gst_number
+            and business.tax_number
             and business.billing_email
             and business.authorized_person_name
             and business.designation
@@ -3816,8 +4001,8 @@ def calculate_customer_completion(
 
         step5_completed = bool(
             documents
-            and documents.identity_proof
-            and documents.address_proof
+            and documents.tax_identification_card
+            and documents.tax_number
         )
 
     elif profile and profile.customer_type == "business":
@@ -3825,10 +4010,11 @@ def calculate_customer_completion(
         step5_completed = bool(
             documents
             and documents.company_registration_certificate
+            and documents.cin_number
             and documents.tax_identification_card
+            and documents.tax_number
             and documents.gst_certificate
-            and documents.moa_aoa
-            and documents.bank_account_proof
+            and documents.gst_number
         )
 
     else:
@@ -3849,8 +4035,6 @@ def calculate_customer_completion(
         and bank.ifsc_code
         and bank.local_code
         and bank.bank_address
-        and documents
-        and documents.bank_account_proof
     )
 
     if step6_completed:
@@ -3879,7 +4063,6 @@ def calculate_customer_completion(
             "step_6": step6_completed
         }
     }
-
 
 
 @router.get("/customer/profile")
@@ -4002,447 +4185,473 @@ async def get_customer_profile(
     # =========================================================
 
     return {
+    "success": True,
 
-        "success": True,
+    # =====================================================
+    # PROFILE COMPLETION
+    # =====================================================
 
-        # =====================================================
-        # PROFILE COMPLETION
-        # =====================================================
+    "completion_percentage": completion["completion_percentage"],
+    "completed_steps": completion["completed_steps"],
+    "total_steps": completion["total_steps"],
+    "steps": completion["steps"],
 
-        "completion_percentage": (
-            completion["completion_percentage"]
-        ),
+    # =====================================================
+    # CUSTOMER DATA
+    # =====================================================
 
-        "completed_steps": (
-            completion["completed_steps"]
-        ),
+    "data": {
 
-        "total_steps": 6,
+        "customer_type": profile.customer_type,
 
-        "steps": completion["steps"],
+        # -------------------------------------------------
+        # STEP 2 - BASIC INFORMATION
+        # -------------------------------------------------
 
-        # =====================================================
-        # CUSTOMER DATA
-        # =====================================================
+        "basic_information": {
+            "full_name": profile.full_name,
+            "email": user.email,
+            "phone_number": user.mobile_number
+        },
 
-        "data": {
+        # -------------------------------------------------
+        # STEP 3 - VERIFY IDENTITY
+        # -------------------------------------------------
 
-            "customer_type": profile.customer_type,
+        "identity": {
 
-            # -------------------------------------------------
-            # STEP 2 - BASIC INFORMATION
-            # -------------------------------------------------
+            "id_type": (
+                identity.identity_type
+                if identity
+                else None
+            ),
 
-            "basic_information": {
+            "full_name": (
+                identity.identity_full_name
+                if identity
+                else None
+            ),
 
-                "full_name": profile.full_name,
+            "date_of_birth": (
+                identity.date_of_birth.isoformat()
+                if identity and identity.date_of_birth
+                else None
+            ),
 
-                "email": user.email,
+            "gender": (
+                profile.gender
+                if profile
+                else None
+            ),
 
-                "phone_number": user.phone_number
-            },
+            "identity_number": (
+                identity.identity_number
+                if identity
+                else None
+            ),
 
-            # -------------------------------------------------
-            # STEP 3 - VERIFY IDENTITY
-            # -------------------------------------------------
+            "address_on_id": (
+                identity.address_on_id
+                if identity
+                else None
+            ),
 
-            "identity": {
+            "verified": (
+                identity.verified
+                if identity
+                else False
+            ),
 
-                "id_type": (
-                    identity.identity_type
-                    if identity
-                    else None
-                ),
+            "front_image_uploaded": (
+                bool(
+                    identity
+                    and identity.front_image
+                )
+            ),
+
+            "back_image_uploaded": (
+                bool(
+                    identity
+                    and identity.back_image
+                )
+            )
+        },
+
+        # -------------------------------------------------
+        # STEP 4 - BUSINESS INFORMATION
+        # -------------------------------------------------
+
+        "business_information": {
+
+            "company_name": (
+                business.company_name
+                if business
+                else None
+            ),
+
+            "business_type": (
+                business.business_type
+                if business
+                else None
+            ),
+
+            "industry": (
+                business.industry
+                if business
+                else None
+            ),
+
+            "company_website": (
+                business.website
+                if business
+                else None
+            ),
+
+            "office_address": (
+                business.office_address
+                if business
+                else None
+            ),
+
+            "city": (
+                business.city
+                if business
+                else None
+            ),
+
+            "state": (
+                business.state
+                if business
+                else None
+            ),
+
+            "pincode": (
+                business.pincode
+                if business
+                else None
+            ),
+
+            "gst_number": (
+                business.gst_number
+                if business
+                else None
+            ),
+
+            "tax_number": (
+                business.tax_number
+                if business
+                else None
+            ),
+
+            "billing_email": (
+                business.billing_email
+                if business
+                else None
+            ),
+
+            "authorized_contact": {
 
                 "full_name": (
-                    identity.identity_full_name
-                    if identity
-                    else None
-                ),
-
-                "date_of_birth": (
-                    identity.date_of_birth.isoformat()
-                    if identity
-                    and identity.date_of_birth
-                    else None
-                ),
-
-                "identity_number": (
-                    identity.identity_number
-                    if identity
-                    else None
-                ),
-
-                "verified": (
-                    identity.verified
-                    if identity
-                    else False
-                ),
-
-                "front_image_uploaded": (
-                    bool(
-                        identity
-                        and identity.front_image
-                    )
-                ),
-
-                "back_image_uploaded": (
-                    bool(
-                        identity
-                        and identity.back_image
-                    )
-                )
-            },
-
-            # -------------------------------------------------
-            # STEP 4 - BUSINESS INFORMATION
-            # -------------------------------------------------
-
-            "business_information": {
-
-                "company_name": (
-                    business.company_name
+                    business.authorized_person_name
                     if business
                     else None
                 ),
 
-                "business_type": (
-                    business.business_type
+                "designation": (
+                    business.designation
                     if business
                     else None
                 ),
 
-                "industry": (
-                    business.industry
+                "phone": (
+                    business.work_phone
                     if business
                     else None
                 ),
 
-                "company_registration_number": (
-                    business.company_registration_number
+                "email": (
+                    business.work_email
                     if business
                     else None
-                ),
-
-                "gst_number": (
-                    business.gst_number
-                    if business
-                    else None
-                ),
-
-                "city": (
-                    business.city
-                    if business
-                    else None
-                ),
-
-                "state": (
-                    business.state
-                    if business
-                    else None
-                ),
-
-                "pincode": (
-                    business.pincode
-                    if business
-                    else None
-                ),
-
-                "office_address": (
-                    business.office_address
-                    if business
-                    else None
-                ),
-
-                "pan_number": (
-                    business.pan_number
-                    if business
-                    else None
-                ),
-
-                "billing_email": (
-                    business.billing_email
-                    if business
-                    else None
-                ),
-
-                "authorized_contact": {
-
-                    "full_name": (
-                        business.authorized_person_name
-                        if business
-                        else None
-                    ),
-
-                    "designation": (
-                        business.designation
-                        if business
-                        else None
-                    ),
-
-                    "phone": (
-                        business.work_phone
-                        if business
-                        else None
-                    ),
-
-                    "email": (
-                        business.work_email
-                        if business
-                        else None
-                    )
-                }
-            },
-
-            # -------------------------------------------------
-            # STEP 5 - DOCUMENTS
-            # -------------------------------------------------
-
-            "documents": {
-
-                "company_registration_certificate":
-                    document_status(
-                        documents.company_registration_certificate
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "tax_identification_number":
-                    document_status(
-                        documents.tax_identification_card
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "gst_verification":
-                    document_status(
-                        documents.gst_certificate
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "mca_roc_documents":
-                    document_status(
-                        documents.moa_aoa
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "bank_statement":
-                    document_status(
-                        documents.bank_account_proof
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "identity_proof":
-                    document_status(
-                        documents.identity_proof
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    ),
-
-                "address_proof":
-                    document_status(
-                        documents.address_proof
-                        if documents
-                        else None,
-                        documents.updated_at
-                        if documents
-                        else None
-                    )
-            },
-
-            # -------------------------------------------------
-            # STEP 6 - BANK & PAYOUT
-            # -------------------------------------------------
-
-            "bank_payout": {
-
-                "account_holder_name": (
-                    bank.account_holder_name
-                    if bank
-                    else None
-                ),
-
-                "bank_name": (
-                    bank.bank_name
-                    if bank
-                    else None
-                ),
-
-                "account_number": (
-                    bank.account_number
-                    if bank
-                    else None
-                ),
-
-                "ifsc_code": (
-                    bank.ifsc_code
-                    if bank
-                    else None
-                ),
-
-                "local_code": (
-                    bank.local_code
-                    if bank
-                    else None
-                ),
-
-                "bank_address": (
-                    bank.bank_address
-                    if bank
-                    else None
-                ),
-
-                "email_invoice_for_every_payout": (
-                    bank.email_invoice_for_every_payout
-                    if bank
-                    else False
-                ),
-
-                "bank_statement_uploaded": (
-                    bool(
-                        documents
-                        and documents.bank_account_proof
-                    )
                 )
             }
         },
 
-        # =====================================================
-        # STATISTICS
-        # =====================================================
+        # -------------------------------------------------
+        # STEP 5 - REQUIRED / OPTIONAL DOCUMENTS
+        # -------------------------------------------------
 
-        "statistics": {
+        "documents": {
 
-            "total_bookings": total_bookings,
+            # Company Registration Document
+            "company_registration_certificate": {
 
-            "total_spent": total_spent,
+                "uploaded": bool(
+                    documents
+                    and documents.company_registration_certificate
+                ),
 
-            "last_login_date": (
-                user.last_login_at.isoformat()
-                if user.last_login_at
+                "document_number": (
+                    documents.cin_number
+                    if documents
+                    else None
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.company_registration_certificate
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            # Tax Identification Document / Card
+            "tax_identification_card": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.tax_identification_card
+                ),
+
+                "document_number": (
+                    documents.tax_number
+                    if documents
+                    else None
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.tax_identification_card
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            # GST / SST Document
+            "gst_certificate": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.gst_certificate
+                ),
+
+                "document_number": (
+                    documents.gst_number
+                    if documents
+                    else None
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.gst_certificate
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            # MOA / AOA - Optional
+            "moa_aoa": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.moa_aoa
+                ),
+
+                "document_number": (
+                    documents.document_number
+                    if documents
+                    else None
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.moa_aoa
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            # Bank Account Proof - Optional
+            "bank_account_proof": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.bank_account_proof
+                ),
+
+                "account_number": (
+                    documents.bank_account_number
+                    if documents
+                    else None
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.bank_account_proof
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            # Existing fields kept for compatibility
+            "identity_proof": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.identity_proof
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.identity_proof
+                    and documents.updated_at
+                    else None
+                )
+            },
+
+            "address_proof": {
+
+                "uploaded": bool(
+                    documents
+                    and documents.address_proof
+                ),
+
+                "updated_at": (
+                    documents.updated_at.isoformat()
+                    if documents
+                    and documents.address_proof
+                    and documents.updated_at
+                    else None
+                )
+            }
+        },
+
+        # -------------------------------------------------
+        # STEP 6 - BANK & PAYOUT
+        # -------------------------------------------------
+
+        "bank_payout": {
+
+            "account_holder_name": (
+                bank.account_holder_name
+                if bank
                 else None
             ),
 
-            "last_update_date": (
-                user.updated_at.isoformat()
-                if user.updated_at
+            "bank_name": (
+                bank.bank_name
+                if bank
                 else None
             ),
 
-            "account_created_date": (
-                user.created_at.isoformat()
-                if user.created_at
+            "account_number": (
+                bank.account_number
+                if bank
                 else None
+            ),
+
+            "ifsc_code": (
+                bank.ifsc_code
+                if bank
+                else None
+            ),
+
+            "local_code": (
+                bank.local_code
+                if bank
+                else None
+            ),
+
+            "bank_address": (
+                bank.bank_address
+                if bank
+                else None
+            ),
+
+            "email_invoice_for_every_payout": (
+                bank.email_invoice_for_every_payout
+                if bank
+                else False
+            ),
+
+            "cancelled_cheque_uploaded": (
+                bool(
+                    bank
+                    and bank.cancelled_cheque
+                )
             )
         }
+    },
+
+    # =====================================================
+    # STATISTICS
+    # =====================================================
+
+    "statistics": {
+
+        "total_bookings": total_bookings,
+
+        "total_spent": total_spent,
+
+        "last_login_date": (
+            user.last_login_at.isoformat()
+            if user.last_login_at
+            else None
+        ),
+
+        "last_update_date": (
+            user.updated_at.isoformat()
+            if user.updated_at
+            else None
+        ),
+
+        "account_created_date": (
+            user.created_at.isoformat()
+            if user.created_at
+            else None
+        )
     }
-
+}
+    
 # Update Customer Profile
 
-# Update Customer Profile
 
 @router.put("/customer/profile")
 async def update_customer_profile(
 
     # =========================================================
-    # STEP 2: Basic Information
+    # BUSINESS INFORMATION
     # =========================================================
 
-    full_name: Optional[str] = Form(None),
-    email: Optional[str] = Form(None),
-
-    # NOTE:
-    # phone_number is intentionally NOT included.
-    # Phone number cannot be updated.
-
-    # =========================================================
-    # STEP 3: Verify Your Identity
-    # =========================================================
-
-    identity_type: Optional[str] = Form(None),
-    identity_full_name: Optional[str] = Form(None),
-    identity_date_of_birth: Optional[date] = Form(None),
-    identity_number: Optional[str] = Form(None),
-
-    front_image: UploadFile = File(None),
-    back_image: UploadFile = File(None),
-
-    # =========================================================
-    # STEP 4: Business Information
-    # =========================================================
-
-    # Company Details
     company_name: Optional[str] = Form(None),
-    business_type: Optional[str] = Form(None),
-    industry: Optional[str] = Form(None),
-    company_registration_number: Optional[str] = Form(None),
-
-    # Business Address
-    gst_number: Optional[str] = Form(None),
-    city: Optional[str] = Form(None),
-    state: Optional[str] = Form(None),
-    pincode: Optional[str] = Form(None),
-    office_address: Optional[str] = Form(None),
-
-    # Tax & Billing
-    pan_number: Optional[str] = Form(None),
-    billing_email: Optional[str] = Form(None),
-
-    # Authorized Contact Person
     authorized_person_name: Optional[str] = Form(None),
-    designation: Optional[str] = Form(None),
     work_phone: Optional[str] = Form(None),
     work_email: Optional[str] = Form(None),
+    business_type: Optional[str] = Form(None),
 
-    # =========================================================
-    # STEP 5: Upload Documents
-    # =========================================================
+    company_registration_number: Optional[str] = Form(None),
+    business_tax_number: Optional[str] = Form(None),
+    gst_number: Optional[str] = Form(None),
 
-    # Business Customer
     company_registration_certificate: UploadFile = File(None),
     tax_identification_card: UploadFile = File(None),
     gst_certificate: UploadFile = File(None),
     moa_aoa: UploadFile = File(None),
 
-    # Individual Customer
-    identity_proof: UploadFile = File(None),
-    address_proof: UploadFile = File(None),
-
     # =========================================================
-    # STEP 6: Bank & Payout Setup
+    # INDIVIDUAL INFORMATION
     # =========================================================
 
-    account_holder_name: Optional[str] = Form(None),
-    bank_name: Optional[str] = Form(None),
-    account_number: Optional[str] = Form(None),
-    ifsc_code: Optional[str] = Form(None),
-    local_code: Optional[str] = Form(None),
-    bank_address: Optional[str] = Form(None),
+    tax_number: Optional[str] = Form(None),
 
-    email_invoice_for_every_payout: Optional[bool] = Form(None),
-
-    bank_statement: UploadFile = File(None),
+    bank_account_proof: UploadFile = File(None),
+    bank_account_number: Optional[str] = Form(None),
 
     # =========================================================
     # AUTH + DB
@@ -4480,13 +4689,15 @@ async def update_customer_profile(
     os.makedirs("uploads/customer", exist_ok=True)
 
     async def save_file(file: UploadFile):
+
         if not file or not file.filename:
             return None
 
-        original_name = Path(file.filename).name
-        extension = Path(original_name).suffix.lower()
+        original_name = FilePath(file.filename).name
+        extension = FilePath(original_name).suffix.lower()
 
         filename = f"{uuid.uuid4().hex}{extension}"
+
         file_path = os.path.join(
             "uploads/customer",
             filename
@@ -4506,93 +4717,31 @@ async def update_customer_profile(
         return file_path
 
     # =========================================================
-    # STEP 2: BASIC INFORMATION
+    # BUSINESS INFORMATION
     # =========================================================
-
-    if full_name is not None:
-        profile.full_name = full_name
-
-    if email is not None:
-        user.email = email
-
-    # phone_number is intentionally NOT updated.
-
-    # =========================================================
-    # STEP 3: VERIFY IDENTITY
-    # =========================================================
-
-    identity = db.execute(
-        select(CustomerIdentity).where(
-            CustomerIdentity.user_profile_id == profile.id
-        )
-    ).scalars().first()
-
-    identity_fields_submitted = any([
-        identity_type is not None,
-        identity_full_name is not None,
-        identity_date_of_birth is not None,
-        identity_number is not None,
-        front_image is not None,
-        back_image is not None
-    ])
-
-    if identity_fields_submitted:
-
-        if not identity:
-            identity = CustomerIdentity(
-                user_profile_id=profile.id
-            )
-            db.add(identity)
-
-        if identity_type is not None:
-            identity.identity_type = identity_type
-
-        if identity_full_name is not None:
-            identity.identity_full_name = identity_full_name
-
-        if identity_date_of_birth is not None:
-            identity.date_of_birth = identity_date_of_birth
-
-        if identity_number is not None:
-            identity.identity_number = identity_number
-
-        if front_image:
-            identity.front_image = await save_file(front_image)
-
-        if back_image:
-            identity.back_image = await save_file(back_image)
-
-    # =========================================================
-    # STEP 4: BUSINESS INFORMATION
-    # =========================================================
-
-    business = db.execute(
-        select(CustomerBusiness).where(
-            CustomerBusiness.user_profile_id == profile.id
-        )
-    ).scalars().first()
 
     business_fields_submitted = any([
         company_name is not None,
-        business_type is not None,
-        industry is not None,
-        company_registration_number is not None,
-        gst_number is not None,
-        city is not None,
-        state is not None,
-        pincode is not None,
-        office_address is not None,
-        pan_number is not None,
-        billing_email is not None,
         authorized_person_name is not None,
-        designation is not None,
         work_phone is not None,
-        work_email is not None
+        work_email is not None,
+        business_type is not None,
+        company_registration_number is not None,
+        business_tax_number is not None,
+        gst_number is not None,
+        company_registration_certificate is not None,
+        tax_identification_card is not None,
+        gst_certificate is not None,
+        moa_aoa is not None
     ])
 
     if business_fields_submitted:
 
-        profile.customer_type = "business"
+        business = db.execute(
+            select(CustomerBusiness).where(
+                CustomerBusiness.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
         if not business:
             business = CustomerBusiness(
@@ -4600,48 +4749,15 @@ async def update_customer_profile(
             )
             db.add(business)
 
+        # ---------------------------------------------------------
+        # BUSINESS TEXT FIELDS
+        # ---------------------------------------------------------
+
         if company_name is not None:
             business.company_name = company_name
 
-        if business_type is not None:
-            business.business_type = business_type
-
-        if industry is not None:
-            business.industry = industry
-
-        if company_registration_number is not None:
-            business.company_registration_number = (
-                company_registration_number
-            )
-
-        if gst_number is not None:
-            business.gst_number = gst_number
-
-        if city is not None:
-            business.city = city
-
-        if state is not None:
-            business.state = state
-
-        if pincode is not None:
-            business.pincode = pincode
-
-        if office_address is not None:
-            business.office_address = office_address
-
-        if pan_number is not None:
-            business.pan_number = pan_number
-
-        if billing_email is not None:
-            business.billing_email = billing_email
-
         if authorized_person_name is not None:
-            business.authorized_person_name = (
-                authorized_person_name
-            )
-
-        if designation is not None:
-            business.designation = designation
+            business.authorized_person_name = authorized_person_name
 
         if work_phone is not None:
             business.work_phone = work_phone
@@ -4649,27 +4765,29 @@ async def update_customer_profile(
         if work_email is not None:
             business.work_email = work_email
 
-    # =========================================================
-    # STEP 5: DOCUMENTS
-    # =========================================================
+        if business_type is not None:
+            business.business_type = business_type
 
-    documents = db.execute(
-        select(CustomerDocument).where(
-            CustomerDocument.user_profile_id == profile.id
-        )
-    ).scalars().first()
+        if company_registration_number is not None:
+            business.company_registration_number = (
+                company_registration_number
+            )
 
-    documents_submitted = any([
-        company_registration_certificate is not None,
-        tax_identification_card is not None,
-        gst_certificate is not None,
-        moa_aoa is not None,
-        identity_proof is not None,
-        address_proof is not None,
-        bank_statement is not None
-    ])
+        if business_tax_number is not None:
+            business.tax_number = business_tax_number
 
-    if documents_submitted:
+        if gst_number is not None:
+            business.gst_number = gst_number
+
+        # ---------------------------------------------------------
+        # BUSINESS DOCUMENTS
+        # ---------------------------------------------------------
+
+        documents = db.execute(
+            select(CustomerDocument).where(
+                CustomerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
 
         if not documents:
             documents = CustomerDocument(
@@ -4700,78 +4818,67 @@ async def update_customer_profile(
 
         if moa_aoa:
             documents.moa_aoa = (
-                await save_file(moa_aoa)
-            )
-
-        if identity_proof:
-            documents.identity_proof = (
-                await save_file(identity_proof)
-            )
-
-        if address_proof:
-            documents.address_proof = (
-                await save_file(address_proof)
-            )
-
-        # Bank Statement is stored as bank_account_proof
-        if bank_statement:
-            documents.bank_account_proof = (
-                await save_file(bank_statement)
+                await save_file(
+                    moa_aoa
+                )
             )
 
     # =========================================================
-    # STEP 6: BANK & PAYOUT SETUP
+    # INDIVIDUAL INFORMATION
     # =========================================================
 
-    bank_details = db.execute(
-        select(CustomerBankDetail).where(
-            CustomerBankDetail.user_profile_id == profile.id
-        )
-    ).scalars().first()
-
-    bank_fields_submitted = any([
-        account_holder_name is not None,
-        bank_name is not None,
-        account_number is not None,
-        ifsc_code is not None,
-        local_code is not None,
-        bank_address is not None,
-        email_invoice_for_every_payout is not None,
-        bank_statement is not None
+    individual_fields_submitted = any([
+        tax_number is not None,
+        bank_account_proof is not None,
+        bank_account_number is not None
     ])
 
-    if bank_fields_submitted:
+    if individual_fields_submitted:
 
-        if not bank_details:
-            bank_details = CustomerBankDetail(
+        documents = db.execute(
+            select(CustomerDocument).where(
+                CustomerDocument.user_profile_id == profile.id
+            )
+        ).scalars().first()
+
+        if not documents:
+            documents = CustomerDocument(
                 user_profile_id=profile.id
             )
-            db.add(bank_details)
+            db.add(documents)
 
-        if account_holder_name is not None:
-            bank_details.account_holder_name = (
-                account_holder_name
+        # ---------------------------------------------------------
+        # TAX NUMBER
+        # ---------------------------------------------------------
+
+        if tax_number is not None:
+            documents.tax_number = tax_number
+
+        # ---------------------------------------------------------
+        # TAX IDENTIFICATION CARD
+        # ---------------------------------------------------------
+
+        # NOTE:
+        # tax_identification_card is handled above because
+        # the same document is also used in the business UI.
+
+        # ---------------------------------------------------------
+        # BANK ACCOUNT PROOF
+        # ---------------------------------------------------------
+
+        if bank_account_proof:
+            documents.bank_account_proof = (
+                await save_file(
+                    bank_account_proof
+                )
             )
 
-        if bank_name is not None:
-            bank_details.bank_name = bank_name
+        # ---------------------------------------------------------
+        # BANK ACCOUNT NUMBER
+        # ---------------------------------------------------------
 
-        if account_number is not None:
-            bank_details.account_number = account_number
-
-        if ifsc_code is not None:
-            bank_details.ifsc_code = ifsc_code
-
-        if local_code is not None:
-            bank_details.local_code = local_code
-
-        if bank_address is not None:
-            bank_details.bank_address = bank_address
-
-        if email_invoice_for_every_payout is not None:
-            bank_details.email_invoice_for_every_payout = (
-                email_invoice_for_every_payout
-            )
+        if bank_account_number is not None:
+            documents.bank_account_number = bank_account_number
 
     # =========================================================
     # SAVE
