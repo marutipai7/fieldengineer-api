@@ -52,6 +52,7 @@ from app.profile.models import (
     VendorBankDetail,
     VendorNotificationPreference,
     EngineerInvitation,
+    YearsOfExperience,
     Vendor,
     CustomerBankDetail,
     CustomerCompanyAssociation,
@@ -94,6 +95,49 @@ router = APIRouter(
     prefix="/profile",
     tags=["Profile"]
 )
+
+
+@router.get("/field-engineer/average-experience")
+async def get_average_experience(
+    db: Session = Depends(get_db)
+):
+    experiences = (
+        db.query(YearsOfExperience)
+        .order_by(YearsOfExperience.id.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": experience.id,
+            "experience": experience.experience
+        }
+        for experience in experiences
+    ]
+
+
+
+@router.get("/field-engineer/vendors")
+async def get_vendors(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Vendor)
+
+    if search:
+        query = query.filter(
+            Vendor.vendor_name.ilike(f"%{search}%")
+        )
+
+    vendors = query.order_by(Vendor.vendor_name.asc()).all()
+
+    return [
+        {
+            "id": vendor.id,
+            "vendor_name": vendor.vendor_name
+        }
+        for vendor in vendors
+    ]
 # def get_user_and_profile(
 #     email: str,
 #     db: Session
