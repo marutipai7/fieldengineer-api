@@ -1801,6 +1801,9 @@ async def vendor_complete_profile(
 
     timezone: str = Form(None),
     working_hours: str = Form(None),
+    # service_state: str = Form(None),
+    # service_city: str = Form(None),
+    # service_radius: int = Form(None),
 
     # profile_image: UploadFile = File(...),
 
@@ -2778,6 +2781,21 @@ async def update_vendor_profile(
 
     timezone: str = Form(None),
     working_hours: str = Form(None),
+    account_holder_name: str = Form(None),
+    bank_name: str = Form(None),
+    account_number: str = Form(None),
+    ifsc_code: str = Form(None),
+    branch_name: str = Form(None),
+    service_state: str = Form(None),
+    service_city: str = Form(None),
+    service_radius: int = Form(None),
+    total_engineers: int = Form(None),
+    certified_engineers: int = Form(None),
+    support_staff: int = Form(None),
+    email_notification: bool = Form(None),
+    sms_notification: bool = Form(None),
+    push_notification: bool = Form(None),
+
 
     profile_image: UploadFile = File(None),
 
@@ -2899,6 +2917,124 @@ async def update_vendor_profile(
 
         profile.profile_image = image_path
 
+
+
+    # ----------------------------
+    # Update Service Coverage
+    # ----------------------------
+
+    coverage = db.execute(
+        select(VendorServiceCoverage).where(
+            VendorServiceCoverage.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not coverage:
+        coverage = VendorServiceCoverage(
+           vendor_profile_id=profile.id
+        )
+        db.add(coverage)
+
+    if service_state is not None:
+        coverage.state = service_state
+
+    if service_city is not None:
+       coverage.city = service_city
+
+    if service_radius is not None:
+       coverage.service_radius = service_radius
+
+
+    # ----------------------------
+    # Update Workforce
+     # ----------------------------
+
+    workforce = db.execute(
+        select(VendorWorkforce).where(
+           VendorWorkforce.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not workforce:
+        workforce = VendorWorkforce(
+            vendor_profile_id=profile.id
+        )
+    db.add(workforce)
+
+    if total_engineers is not None:
+       workforce.total_engineers = total_engineers
+
+    if certified_engineers is not None:
+        workforce.certified_engineers = certified_engineers
+
+    if support_staff is not None:
+        workforce.support_staff = support_staff
+
+
+
+
+
+    # ----------------------------
+    # Update Bank Details
+    # ----------------------------
+
+    bank = db.execute(
+        select(VendorBankDetail).where(
+            VendorBankDetail.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not bank:
+        bank = VendorBankDetail(
+           vendor_profile_id=profile.id
+        )
+    db.add(bank)
+
+    if account_holder_name is not None:
+        bank.account_holder_name = account_holder_name
+
+    if bank_name is not None:
+        bank.bank_name = bank_name
+
+    if account_number is not None:
+        bank.account_number = account_number
+
+    if ifsc_code is not None:
+        bank.ifsc_code = ifsc_code
+ 
+    if branch_name is not None:
+        bank.branch_name = branch_name
+
+
+
+
+
+
+
+    # ----------------------------
+    # Update Notification Preferences
+    # ----------------------------
+
+    notification = db.execute(
+        select(VendorNotificationPreference).where(
+            VendorNotificationPreference.vendor_profile_id == profile.id
+        )
+    ).scalars().first()
+
+    if not notification:
+        notification = VendorNotificationPreference(
+            vendor_profile_id=profile.id
+        )
+    db.add(notification)
+
+    if email_notification is not None:
+        notification.email_notification = email_notification
+
+    if sms_notification is not None:
+        notification.sms_notification = sms_notification
+
+    if push_notification is not None:
+        notification.push_notification = push_notification
     # ----------------------------
     # Update Vendor Documents
     # ----------------------------
