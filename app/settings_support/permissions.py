@@ -9,7 +9,7 @@ from app.settings_support.schemas import PermissionUpdateSchema
 
 
 router = APIRouter(
-    prefix="/permissions",
+    prefix="/settings/permissions",
     tags=["Settings & Support"],
 )
 

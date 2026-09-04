@@ -7,7 +7,7 @@ from app.settings_support.schemas import NotificationPreferencesUpdate
 from app.utils.auth_utils import get_current_user_mobile
 
 router = APIRouter(
-    prefix="/notifications",
+    prefix="/settings/notifications",
     tags=["Settings & Support"]
 )
 
