@@ -56,6 +56,7 @@ class UserProfile(Base):
     profile_image = Column(Text)
     customer_type = Column(String(30), nullable=True)
     referral_code = Column(String(20), unique=True)
+    professional_summary = Column(Text, nullable=True)
     is_associated_with_vendor = Column(
        Boolean,
        default=False
@@ -305,17 +306,122 @@ class PrimarySpecialization(Base):
 #         back_populates="field_engineer_profile"
 #     )
 
-# class FieldEngineerSkill(Base):
-#     __tablename__ = "field_engineer_skills"
+class FieldEngineerSkill(Base):
+    __tablename__ = "field_engineer_skills"
 
-#     id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
-#     field_engineer_id = Column(
-#         Integer,
-#         ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
-#     )
+    field_engineer_id = Column(
+        Integer,
+        ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
+    )
 
-#     skill_name = Column(String(255), nullable=False)
+    skill_name = Column(String(255), nullable=False)
+
+class FieldEngineerExperience(Base):
+    __tablename__ = "field_engineer_experiences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # field_engineer_id = Column(
+    #     Integer,
+    #     ForeignKey("field_engineer_profiles.id", ondelete="CASCADE")
+    # )
+    user_profile_id = Column(
+       Integer,
+       ForeignKey("user_profiles.id", ondelete="CASCADE"),
+       nullable=False
+    )
+
+    company_name = Column(String(255))
+    job_title = Column(String(255))
+    employment_type = Column(String(100))
+    location = Column(String(255))
+
+    start_date = Column(Date)
+    end_date = Column(Date)
+
+    currently_working = Column(Boolean, default=False)
+
+    responsibilities = Column(Text)
+    technologies_used = Column(Text)
+    achievements = Column(Text)
+
+    document_url = Column(Text)
+
+class FieldEngineerCertification(Base):
+    __tablename__ = "field_engineer_certifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_profile_id = Column(
+       Integer,
+       ForeignKey("user_profiles.id", ondelete="CASCADE"),
+       nullable=False
+    )
+
+    certification_name = Column(String(255))
+    issued_by = Column(String(255))
+
+    issue_date = Column(Date)
+    expiry_date = Column(Date)
+
+    document_url = Column(Text)
+
+class FieldEngineerEducation(Base):
+    __tablename__ = "field_engineer_education"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    degree_name = Column(String(255))
+    institute_name = Column(String(255))
+    specialization = Column(String(255))
+    grade_percentage = Column(String(50))
+
+    start_date = Column(Date)
+    end_date = Column(Date)
+
+    document_url = Column(Text)
+
+class FieldEngineerLicense(Base):
+    __tablename__ = "field_engineer_licenses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_profile_id = Column(
+       Integer,
+       ForeignKey("user_profiles.id", ondelete="CASCADE"),
+       nullable=False
+    )
+
+    license_name = Column(String(255))
+    issued_by = Column(String(255))
+    license_number = Column(String(255))
+    status = Column(String(50))
+
+    issue_date = Column(Date)
+    expiry_date = Column(Date)
+
+    document_url = Column(Text)
+
+class FieldEngineerTool(Base):
+    __tablename__ = "field_engineer_tools"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_profile_id = Column(
+        Integer,
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    tool_name = Column(String(255))
 
 # class FieldEngineerExperience(Base):
 #     __tablename__ = "field_engineer_experiences"
@@ -1236,4 +1342,42 @@ class CustomerBankDetail(Base):
     profile = relationship(
         "UserProfile",
         back_populates="customer_bank_detail"
+    )
+
+class CustomerCompanyAssociation(Base):
+    __tablename__ = "customer_company_associations"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        autoincrement=True
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    company_id = Column(
+        Integer,
+        ForeignKey("vendors.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    status = Column(
+        String(20),
+        nullable=False,
+        default="active"
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
     )

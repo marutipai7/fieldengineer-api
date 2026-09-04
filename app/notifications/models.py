@@ -168,3 +168,62 @@ class FCMDeviceToken(Base):
             "user_id",
         ),
     )
+class NotificationPreferences(Base):
+    __tablename__ = "notification_preferences"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # ALL
+    all_priority_jobs = Column(Boolean, default=True, nullable=False)
+    all_new_job_requests = Column(Boolean, default=True, nullable=False)
+    all_job_assigned = Column(Boolean, default=True, nullable=False)
+    all_job_reminders = Column(Boolean, default=True, nullable=False)
+    all_job_updates = Column(Boolean, default=True, nullable=False)
+    all_chat_messages = Column(Boolean, default=True, nullable=False)
+    all_missed_messages_reminder = Column(Boolean, default=True, nullable=False)
+    all_payment_received = Column(Boolean, default=True, nullable=False)
+    all_payout_updates = Column(Boolean, default=True, nullable=False)
+    all_app_updates = Column(Boolean, default=True, nullable=False)
+    all_maintenance_alerts = Column(Boolean, default=True, nullable=False)
+
+    # Bookings
+    booking_new_job_requests = Column(Boolean, default=True, nullable=False)
+    booking_job_assigned = Column(Boolean, default=True, nullable=False)
+    booking_job_reminders = Column(Boolean, default=True, nullable=False)
+    booking_job_updates = Column(Boolean, default=True, nullable=False)
+
+    # Engineer
+    engineer_priority_jobs = Column(Boolean, default=True, nullable=False)
+    engineer_job_assigned = Column(Boolean, default=True, nullable=False)
+    engineer_job_updates = Column(Boolean, default=True, nullable=False)
+
+    # Communication
+    communication_chat_messages = Column(Boolean, default=True, nullable=False)
+    communication_missed_messages_reminder = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
