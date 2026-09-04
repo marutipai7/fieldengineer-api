@@ -235,6 +235,14 @@ async def update_notification_preferences(
                 preferences,
                 False,
             )
+
+            db.commit()
+            db.refresh(preferences)
+            return {
+                "success": True,
+                "message": "All notifications disabled successfully",
+                "data": preferences_to_dict(preferences),
+            }
     
     if payload.push_notification is not None:
 
